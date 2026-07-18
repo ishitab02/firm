@@ -1,0 +1,18 @@
+{
+  "name": "@firm/mocks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "firm-mock-vendor": "./src/server.js"
+  },
+  "scripts": {
+    "start:good": "node src/server.js vendor_good",
+    "start:flaky": "node src/server.js vendor_flaky",
+    "start:dead": "node src/server.js vendor_dead",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

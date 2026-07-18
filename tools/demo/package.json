@@ -1,0 +1,17 @@
+{
+  "name": "@firm/demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "firm-demo": "./scenario.js"
+  },
+  "scripts": {
+    "start": "node scenario.js",
+    "start:gateway": "node scenario.js --gateway-url=http://127.0.0.1:8790",
+    "start:live": "node scenario.js --live"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

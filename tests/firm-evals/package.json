@@ -1,0 +1,13 @@
+{
+  "name": "@firm/evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test *.test.js",
+    "test:live": "DATABASE_URL=${DATABASE_URL:-postgresql://firm:firm@127.0.0.1:5432/firm} node --test --test-concurrency=1 worker-live.test.js gateway-worker-live.test.js procurer-live.test.js gateway-procurer-live.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
