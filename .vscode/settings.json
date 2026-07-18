@@ -1,0 +1,6 @@
+  {
+    "python.defaultInterpreterPath": "/home/ishitaaaaw/firm/apps/firm/.venv/bin/python",
+    "python.analysis.extraPaths": [
+      "/home/ishitaaaaw/firm/apps/firm/src"
+    ]
+  }

@@ -1,0 +1,11 @@
+{
+  "venvPath": "apps/firm",
+  "venv": ".venv",
+  "include": [
+    "apps/firm/src",
+    "apps/firm/tests"
+  ],
+  "extraPaths": [
+    "apps/firm/src"
+  ]
+}
