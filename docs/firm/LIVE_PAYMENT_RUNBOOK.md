@@ -219,17 +219,28 @@ rather than appending `/tools/<tool>` — which is the behaviour the unit test
 
 1. **Go/no-go on the spike target above.** The "which ASP" question is now
    answered with real data; what remains is a human saying yes.
-2. **`kya_base_score` is null for all 95 vendors.** apps/kya is absent from this
-   repo, and INTERFACES §4 requires the fixture-scoring bug be reconciled before
-   the index is trusted. The generator refuses to pass the marketplace's
-   `feedbackRate` off as a KYA score. Consequence: sourcing that filters on
-   `min_vendor_score` rejects every vendor today. Either bring apps/kya in, or
-   set `ALLOW_FEEDBACK_RATE_AS_BASE_SCORE=true`, which populates the score from
-   `feedbackRate` and stamps the substitution into the output file.
+2. **`kya_base_score` is null, so the default index does NOT load in the worker.**
+   Verified: all 58 entries fail `VendorIndexEntry` on
+   `kya_base_score: Input should be a valid integer`. This is deliberate, not a
+   bug — apps/kya is absent from this repo and INTERFACES §4 requires the
+   fixture-scoring bug be reconciled before the index is trusted, so the
+   generator will not pass the marketplace's `feedbackRate` off as a KYA score.
+
+   Two ways out:
+   - bring apps/kya in and score properly, or
+   - `ALLOW_FEEDBACK_RATE_AS_BASE_SCORE=true`, which rounds `feedbackRate` into
+     the field and stamps the substitution into the file's `provenance` block.
+
+   Verified that the opt-in path produces a **fully worker-loadable index: 15
+   vendors, 15/15 parse, 0 failures.** It drops to 15 because agents with no
+   rating at all are skipped rather than scored as zero — no rating is not a bad
+   rating, and inventing one would be inventing a reputation.
+
 3. **Capability coverage.** Of 395 priced services the keyword rules map 211 to
-   `market_snapshot` and only 4 to `token_launch`; 180 stay null. If Projects
-   needs real `token_launch` vendors, that thin result is worth a look before
-   the demo depends on it.
+   `market_snapshot` and only 4 to `token_launch`; 180 stay uncategorised and are
+   dropped from the index (they remain in the raw scan). If Projects needs real
+   `token_launch` vendors, that thin result is worth a look before the demo
+   depends on it.
 4. **The refund wallet decision** in §4.
 5. **Pricing mechanics** (INTERFACES 1B) remains OPEN. The gateway still defaults
    to `TIERS`.

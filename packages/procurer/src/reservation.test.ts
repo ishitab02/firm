@@ -27,8 +27,44 @@ import {
   spendSnapshot
 } from "./db.js";
 
-const url = process.env.PROCURER_TEST_DATABASE_URL;
-const suite = url ? describe : describe.skip;
+const configured = process.env.PROCURER_TEST_DATABASE_URL;
+const suite = configured ? describe : describe.skip;
+
+/**
+ * The daily-cap tests assert on a SUM over every row created today, so they
+ * cannot share tables with the eval suite or the demo — a run of either would
+ * silently consume the budget under test and the failure would look like a bug
+ * in the lock. Each run gets its own Postgres schema instead of deleting rows
+ * out from under whatever else is using the database.
+ */
+const SCHEMA = `procurer_test_${process.pid}`;
+
+function urlWithSchema(base: string, schema: string) {
+  const parsed = new URL(base);
+  parsed.searchParams.set("options", `-c search_path=${schema}`);
+  return parsed.toString();
+}
+
+const url = configured ? urlWithSchema(configured, SCHEMA) : undefined;
+
+async function createSchema() {
+  const admin = new (await import("pg")).default.Pool({ connectionString: configured });
+  try {
+    await admin.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
+    await admin.query(`CREATE SCHEMA ${SCHEMA}`);
+  } finally {
+    await admin.end();
+  }
+}
+
+async function dropSchema() {
+  const admin = new (await import("pg")).default.Pool({ connectionString: configured });
+  try {
+    await admin.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
+  } finally {
+    await admin.end();
+  }
+}
 
 const caps: Caps = {
   perCallMax: 100_000,
@@ -49,6 +85,7 @@ const call = (taskId: string, subtaskId: string, endpoint = "http://vendor.test"
 
 suite("procurer reservations", () => {
   beforeAll(async () => {
+    await createSchema();
     process.env.DATABASE_URL = url;
     await ensureTables();
     // Mirrors apps/firm/migrations/001_init.sql. F3 owns this table; the
@@ -75,9 +112,9 @@ suite("procurer reservations", () => {
   });
 
   beforeEach(async () => {
-    await pool().query("DELETE FROM procurer_calls WHERE task_id LIKE 'test_%'");
-    await pool().query("DELETE FROM procurer_refunds WHERE task_id LIKE 'test_%'");
-    await pool().query("DELETE FROM firm_jobs WHERE task_id LIKE 'test_%'");
+    // The schema belongs to this test run, so a full truncate is safe and
+    // leaves no cross-test residue in the daily-cap sums.
+    await pool().query("TRUNCATE procurer_calls, procurer_refunds, firm_jobs");
   });
 
   it("admits exactly one of two concurrent requests for the same subtask", async () => {
@@ -186,11 +223,11 @@ suite("procurer refunds", () => {
 
   afterAll(async () => {
     await closePool();
+    await dropSchema();
   });
 
   beforeEach(async () => {
-    await pool().query("DELETE FROM procurer_refunds WHERE task_id LIKE 'test_%'");
-    await pool().query("DELETE FROM firm_jobs WHERE task_id LIKE 'test_%'");
+    await pool().query("TRUNCATE procurer_refunds, firm_jobs");
   });
 
   async function seedJob(taskId: string, priceUnits: number) {

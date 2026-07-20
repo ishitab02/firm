@@ -129,6 +129,20 @@ function deriveFlags(agent) {
 
 const allowFeedbackAsScore = process.env.ALLOW_FEEDBACK_RATE_AS_BASE_SCORE === "true";
 
+/**
+ * The substituted score, or null when there is nothing to substitute.
+ *
+ * apps/firm's VendorIndexEntry wants `int` in [0, 100]; the marketplace reports
+ * a float (92.86) and reports null for an agent nobody has reviewed. Rounding
+ * is fine — it is already a coarse reputation number — but a missing rating is
+ * not a zero, and scoring it as one would invent a bad reputation for an agent
+ * that simply has no history.
+ */
+function substitutedScore(agent) {
+  if (typeof agent.feedbackRate !== "number" || Number.isNaN(agent.feedbackRate)) return null;
+  return Math.max(0, Math.min(100, Math.round(agent.feedbackRate)));
+}
+
 async function main() {
   if (!inputPath) {
     console.error(
@@ -147,6 +161,10 @@ async function main() {
   const vendors = [];
   let skippedNoEndpoint = 0;
   let pricesUnresolved = 0;
+  let droppedUncategorised = 0;
+  let droppedUnpriced = 0;
+  let skippedNoUsableService = 0;
+  let skippedNoScore = 0;
 
   for (const agent of agents) {
     const callable = (agent.services ?? []).filter(
@@ -193,16 +211,39 @@ async function main() {
       });
     }
 
+    // apps/firm's VendorIndexEntry requires every service to carry a string
+    // capability and a price. A service missing either cannot be sourced or
+    // paid for, so it is dropped here rather than shipped as a row the worker
+    // will reject — which would take the whole index down with it. The full
+    // record survives in the raw scan.
+    const usable = services.filter((service) => service.capability !== null && service.price !== null);
+    droppedUncategorised += services.filter((service) => service.capability === null).length;
+    droppedUnpriced += services.filter((service) => service.capability !== null && service.price === null).length;
+    if (usable.length === 0) {
+      skippedNoUsableService += 1;
+      continue;
+    }
+
+    const score = substitutedScore(agent);
+    if (allowFeedbackAsScore && score === null) {
+      // Opting into the substitution means asking for a worker-loadable index.
+      // An entry with no score would fail VendorIndexEntry and take the whole
+      // file down with it, so it is skipped and counted.
+      skippedNoScore += 1;
+      continue;
+    }
+
     vendors.push({
       agent_id: String(agent.agentId),
       name: agent.name,
       // When a service declares its own endpoint, that one is authoritative.
       // This top-level field exists because INTERFACES §4 asks for it.
-      endpoint: callable[0].endpoint,
+      endpoint: usable[0].endpoint,
       chain_index: agent.chainIndex ?? null,
       communication_address: agent.communicationAddress ?? null,
-      services,
-      kya_base_score: allowFeedbackAsScore ? agent.feedbackRate ?? null : null,
+      services: usable,
+      services_dropped: services.length - usable.length,
+      kya_base_score: allowFeedbackAsScore ? score : null,
       score_source: allowFeedbackAsScore
         ? "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score"
         : "KYA_ENGINE_ABSENT_score_not_populated",
@@ -224,7 +265,15 @@ async function main() {
       scan_source: scan.source ?? "unknown",
       agents_in_scan: agents.length,
       agents_without_callable_endpoint_skipped: skippedNoEndpoint,
+      agents_without_a_usable_service_skipped: skippedNoUsableService,
+      agents_without_a_resolvable_score_skipped: skippedNoScore,
       services_with_unresolved_price: pricesUnresolved,
+      services_dropped_uncategorised: droppedUncategorised,
+      services_dropped_unpriced: droppedUnpriced,
+      dropped_services_note:
+        "apps/firm VendorIndexEntry requires a string capability and a price per service; " +
+        "services missing either are dropped here so they cannot invalidate the whole index. " +
+        "They remain in the raw scan.",
       capability_inference: "keyword rules in tools/vendor-index/generate.js; every service carries capability_source",
       token_decimals: "looked up per fee token via `onchainos token info`; never assumed",
       kya_base_score: allowFeedbackAsScore
