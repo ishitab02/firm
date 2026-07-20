@@ -1,0 +1,264 @@
+/**
+ * Reservation and cap tests against a real Postgres.
+ *
+ * These are the tests that prove the property the brief asks for: "no
+ * interleaving of calls can breach a cap". That property lives in a
+ * transaction and an advisory lock, so it cannot be demonstrated with mocks —
+ * it needs a real database and genuinely concurrent callers.
+ *
+ * Skipped unless PROCURER_TEST_DATABASE_URL is set, so `pnpm test` stays green
+ * on a machine with no database:
+ *   PROCURER_TEST_DATABASE_URL=postgresql://firm:firm@127.0.0.1:5433/firm pnpm -F @firm/procurer test
+ */
+
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+import { Caps } from "./caps.js";
+import {
+  closePool,
+  ensureTables,
+  markSigned,
+  pool,
+  releaseCall,
+  reserveCall,
+  reserveRefund,
+  settleCall,
+  settleRefund,
+  spendSnapshot
+} from "./db.js";
+
+const url = process.env.PROCURER_TEST_DATABASE_URL;
+const suite = url ? describe : describe.skip;
+
+const caps: Caps = {
+  perCallMax: 100_000,
+  perTaskMax: 250_000,
+  dailyMax: 500_000,
+  dailyRefundMax: 200_000
+};
+
+const usdt = (units: number) => ({ amount: String(units), decimals: 6, token: "USDT" });
+
+const call = (taskId: string, subtaskId: string, endpoint = "http://vendor.test") => ({
+  idempotencyKey: `${taskId}:${subtaskId}:${endpoint}`,
+  taskId,
+  subtaskId,
+  vendorEndpoint: endpoint,
+  ceiling: usdt(0)
+});
+
+suite("procurer reservations", () => {
+  beforeAll(async () => {
+    process.env.DATABASE_URL = url;
+    await ensureTables();
+    // Mirrors apps/firm/migrations/001_init.sql. F3 owns this table; the
+    // procurer only ever reads it, and this test needs a row to read.
+    await pool().query(`
+      CREATE TABLE IF NOT EXISTS firm_jobs (
+        task_id TEXT PRIMARY KEY,
+        quote_id TEXT NOT NULL,
+        state TEXT NOT NULL,
+        goal TEXT NOT NULL,
+        quote JSONB NOT NULL,
+        progress JSONB NOT NULL DEFAULT '[]'::jsonb,
+        deliverable JSONB,
+        provenance JSONB,
+        refund JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  beforeEach(async () => {
+    await pool().query("DELETE FROM procurer_calls WHERE task_id LIKE 'test_%'");
+    await pool().query("DELETE FROM procurer_refunds WHERE task_id LIKE 'test_%'");
+    await pool().query("DELETE FROM firm_jobs WHERE task_id LIKE 'test_%'");
+  });
+
+  it("admits exactly one of two concurrent requests for the same subtask", async () => {
+    const request = { ...call("test_idem", "s1"), ceiling: usdt(50_000) };
+    const [first, second] = await Promise.all([
+      reserveCall(request, 50_000, caps),
+      reserveCall(request, 50_000, caps)
+    ]);
+
+    const kinds = [first.kind, second.kind].sort();
+    expect(kinds).toEqual(["in_flight", "reserved"]);
+  });
+
+  it("never lets concurrent distinct subtasks breach the per-task cap", async () => {
+    // Six callers, 50k each, per-task cap 250k. At most five can be admitted,
+    // and the sum of what is admitted must never exceed the cap.
+    const requests = Array.from({ length: 6 }, (_, index) => ({
+      ...call("test_task_cap", `s${index}`),
+      ceiling: usdt(50_000)
+    }));
+
+    const outcomes = await Promise.all(requests.map((request) => reserveCall(request, 50_000, caps)));
+    const admitted = outcomes.filter((outcome) => outcome.kind === "reserved").length;
+
+    expect(admitted).toBe(5);
+    expect(outcomes.filter((outcome) => outcome.kind === "cap_exceeded")).toHaveLength(1);
+
+    const total = await pool().query(
+      `SELECT COALESCE(SUM((reserved_amount->>'amount')::bigint), 0)::bigint AS spend
+       FROM procurer_calls WHERE task_id = 'test_task_cap' AND state <> 'released'`
+    );
+    expect(Number(total.rows[0].spend)).toBeLessThanOrEqual(caps.perTaskMax);
+  });
+
+  it("never lets concurrent tasks breach the daily cap", async () => {
+    const requests = Array.from({ length: 8 }, (_, index) => ({
+      ...call(`test_daily_${index}`, "s0"),
+      ceiling: usdt(100_000)
+    }));
+
+    const outcomes = await Promise.all(requests.map((request) => reserveCall(request, 100_000, caps)));
+    const admitted = outcomes.filter((outcome) => outcome.kind === "reserved").length;
+
+    expect(admitted).toBe(5); // 5 x 100k = the 500k daily cap exactly.
+    const snapshot = await spendSnapshot();
+    expect(snapshot.spent_today).toBeLessThanOrEqual(caps.dailyMax);
+  });
+
+  it("rejects a single call above the per-call cap before it reserves anything", async () => {
+    const outcome = await reserveCall({ ...call("test_percall", "s0"), ceiling: usdt(100_001) }, 100_001, caps);
+    expect(outcome).toMatchObject({ kind: "cap_exceeded", detail: /per-call/ });
+
+    const rows = await pool().query("SELECT 1 FROM procurer_calls WHERE task_id = 'test_percall'");
+    expect(rows.rowCount).toBe(0);
+  });
+
+  it("replays a settled receipt instead of paying twice", async () => {
+    const request = { ...call("test_replay", "s0"), ceiling: usdt(50_000) };
+    expect((await reserveCall(request, 50_000, caps)).kind).toBe("reserved");
+
+    const receipt = { ok: true, receipt: { tx: "0xrecorded" } };
+    await settleCall(request.idempotencyKey, usdt(50_000), receipt);
+
+    const repeat = await reserveCall(request, 50_000, caps);
+    expect(repeat).toEqual({ kind: "replay", response: receipt });
+  });
+
+  it("refuses to sign a second authorization when the first one's fate is unknown", async () => {
+    const request = { ...call("test_signed", "s0"), ceiling: usdt(50_000) };
+    await reserveCall(request, 50_000, caps);
+    await markSigned(request.idempotencyKey);
+
+    const repeat = await reserveCall(request, 50_000, caps);
+    expect(repeat).toMatchObject({ kind: "needs_human" });
+  });
+
+  it("frees the cap budget when a call fails before signing", async () => {
+    const request = { ...call("test_release", "s0"), ceiling: usdt(100_000) };
+    await reserveCall(request, 100_000, caps);
+    await releaseCall(request.idempotencyKey, { ok: false, error_code: "VENDOR_TIMEOUT" });
+
+    const snapshot = await spendSnapshot();
+    expect(snapshot.spent_today).toBe(0);
+
+    // ...and the same key can be retried.
+    expect((await reserveCall(request, 100_000, caps)).kind).toBe("reserved");
+  });
+
+  it("does not free the budget for a call that already signed", async () => {
+    const request = { ...call("test_no_release", "s0"), ceiling: usdt(100_000) };
+    await reserveCall(request, 100_000, caps);
+    await markSigned(request.idempotencyKey);
+    await releaseCall(request.idempotencyKey, { ok: false, error_code: "VENDOR_TIMEOUT" });
+
+    const snapshot = await spendSnapshot();
+    expect(snapshot.spent_today).toBe(100_000);
+    expect(snapshot.unconfirmed_signatures).toBe(1);
+  });
+});
+
+suite("procurer refunds", () => {
+  beforeAll(async () => {
+    process.env.DATABASE_URL = url;
+    await ensureTables();
+  });
+
+  afterAll(async () => {
+    await closePool();
+  });
+
+  beforeEach(async () => {
+    await pool().query("DELETE FROM procurer_refunds WHERE task_id LIKE 'test_%'");
+    await pool().query("DELETE FROM firm_jobs WHERE task_id LIKE 'test_%'");
+  });
+
+  async function seedJob(taskId: string, priceUnits: number) {
+    await pool().query(
+      `INSERT INTO firm_jobs (task_id, quote_id, state, goal, quote)
+       VALUES ($1, 'q_test', 'complete', 'test goal', $2::jsonb)`,
+      [taskId, JSON.stringify({ price: usdt(priceUnits) })]
+    );
+  }
+
+  it("auto-approves a refund at or below the task's quoted price", async () => {
+    await seedJob("test_refund_ok", 100_000);
+    const outcome = await reserveRefund(
+      { taskId: "test_refund_ok", toAddress: "0xuser", amount: usdt(100_000) },
+      100_000,
+      caps
+    );
+    expect(outcome.kind).toBe("reserved");
+  });
+
+  it("requires a human above the quoted price", async () => {
+    await seedJob("test_refund_over", 100_000);
+    const outcome = await reserveRefund(
+      { taskId: "test_refund_over", toAddress: "0xuser", amount: usdt(100_001) },
+      100_001,
+      caps
+    );
+    expect(outcome).toMatchObject({ kind: "requires_human", detail: /exceeds the task's quoted price/ });
+  });
+
+  it("requires a human when there is no quote to bound the refund", async () => {
+    const outcome = await reserveRefund(
+      { taskId: "test_refund_unknown", toAddress: "0xuser", amount: usdt(1) },
+      1,
+      caps
+    );
+    expect(outcome).toMatchObject({ kind: "requires_human", detail: /no quoted price on record/ });
+  });
+
+  it("enforces the daily refund cap across concurrent refunds", async () => {
+    for (let index = 0; index < 4; index += 1) {
+      await seedJob(`test_refund_daily_${index}`, 100_000);
+    }
+
+    const outcomes = await Promise.all(
+      Array.from({ length: 4 }, (_, index) =>
+        reserveRefund(
+          { taskId: `test_refund_daily_${index}`, toAddress: "0xuser", amount: usdt(100_000) },
+          100_000,
+          caps
+        )
+      )
+    );
+
+    expect(outcomes.filter((outcome) => outcome.kind === "reserved")).toHaveLength(2);
+    expect(outcomes.filter((outcome) => outcome.kind === "cap_exceeded")).toHaveLength(2);
+  });
+
+  it("replays a settled refund instead of sending a second transfer", async () => {
+    await seedJob("test_refund_replay", 100_000);
+    await reserveRefund({ taskId: "test_refund_replay", toAddress: "0xuser", amount: usdt(50_000) }, 50_000, caps);
+    await settleRefund("test_refund_replay", { tx: "0xrefund" });
+
+    const repeat = await reserveRefund(
+      { taskId: "test_refund_replay", toAddress: "0xuser", amount: usdt(50_000) },
+      50_000,
+      caps
+    );
+    expect(repeat).toEqual({ kind: "replay", response: { tx: "0xrefund" } });
+  });
+});

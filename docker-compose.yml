@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: firm-db
+    environment:
+      POSTGRES_USER: firm
+      POSTGRES_PASSWORD: firm
+      POSTGRES_DB: firm
+    # Override FIRM_DB_PORT when 5432 is already taken by another project's container.
+    ports:
+      - "${FIRM_DB_PORT:-5432}:5432"
+    volumes:
+      - firm-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U firm -d firm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  firm-db-data:
