@@ -51,6 +51,35 @@ function pricingMode(): PricingMode {
   return process.env.PRICING_MODE === "QUOTED_AMOUNT" ? "QUOTED_AMOUNT" : "TIERS";
 }
 
+/**
+ * Firm Express config.
+ *
+ * OFF by default and honestly so: INTERFACES §1A locks the Express job types
+ * only after live vendor-reliability testing (PLAN D4), which is gated on the
+ * human-triggered payment spike. Until a human sets EXPRESS_ENABLED and confirms
+ * the pool, express_run returns a structured "not enabled" rather than charging
+ * for a service whose reliability is unproven.
+ */
+function expressEnabled(): boolean {
+  return process.env.EXPRESS_ENABLED === "true";
+}
+function expressJobTypes(): string[] {
+  return (process.env.EXPRESS_JOB_TYPES ?? "market_snapshot")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+/** Fixed Express price in base units. INTERFACES §1A placeholder: 0.5 USDT. */
+function expressPriceUnits(): string {
+  return process.env.EXPRESS_PRICE_UNITS ?? "500000";
+}
+/** How long express_run waits for the synchronous result before returning PENDING. */
+function expressTimeoutMs(): number {
+  return Number(process.env.EXPRESS_TIMEOUT_MS ?? 60_000);
+}
+/** job_type -> vendor capability. Only the locked job types appear here. */
+const EXPRESS_CAPABILITY: Record<string, string> = { market_snapshot: "market_snapshot" };
+
 async function readJson(req: http.IncomingMessage): Promise<any> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.from(chunk));
@@ -62,6 +91,8 @@ function send(res: http.ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type StoredQuote = { goal: string; quote: Record<string, any>; constraints?: Record<string, any> };
 
@@ -197,12 +228,77 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
   }
 
   if (name === "express_run") {
-    return {
-      error: {
-        code: "TODO_UNVERIFIED_EXPRESS_VENDOR_POOL",
-        detail: "Express job types lock after vendor reliability testing."
-      }
+    const parsed = z.object({ job_type: z.string(), params: z.record(z.any()).optional() }).safeParse(args);
+    if (!parsed.success) return { error: { code: "INVALID_ARGS", detail: "job_type is required" } };
+    const capability = EXPRESS_CAPABILITY[parsed.data.job_type];
+    if (!capability) return { error: { code: "UNKNOWN_JOB_TYPE", detail: parsed.data.job_type } };
+
+    // Express is a fixed-price single-capability job. Insert it paid and drive
+    // it to completion synchronously (INTERFACES §1A returns the deliverable
+    // inline), reusing the same worker, sourcing, and refund machinery.
+    const taskId = `t_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+    const price = { amount: expressPriceUnits(), decimals: 6, token: "USDT" };
+    const jobQuote = {
+      quote_id: `qx_${randomUUID().replaceAll("-", "").slice(0, 12)}`,
+      price,
+      plan_summary: [{ subtask: parsed.data.job_type, capability }],
+      // The worker's Quote model requires valid_until; Express is executed
+      // immediately, so a short window is enough.
+      valid_until: new Date(Date.now() + expressTimeoutMs() + 60_000).toISOString(),
+      quoted_at: new Date().toISOString(),
+      pricing_mode: "QUOTED_AMOUNT",
+      express: true,
+      buyer_address: buyerAddress
     };
+    const insert = pool();
+    try {
+      await insert.query(
+        `INSERT INTO firm_jobs
+         (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
+         VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
+        [taskId, jobQuote.quote_id, `Firm Express: ${parsed.data.job_type}`, JSON.stringify(jobQuote)]
+      );
+    } finally {
+      await insert.end();
+    }
+
+    // A worker (firm-worker run) processes the paid job; poll for the terminal
+    // state and shape the Express receipt from the provenance.
+    const deadline = Date.now() + expressTimeoutMs();
+    while (Date.now() < deadline) {
+      const client = pool();
+      let row: any;
+      try {
+        const result = await client.query(
+          "SELECT state, deliverable, provenance, refund FROM firm_jobs WHERE task_id = $1",
+          [taskId]
+        );
+        row = result.rows[0];
+      } finally {
+        await client.end();
+      }
+      if (row?.state === "complete" && row.provenance) {
+        const prov = row.provenance;
+        const hire = Array.isArray(prov.hires) && prov.hires.length ? prov.hires[prov.hires.length - 1] : undefined;
+        return {
+          deliverable: row.deliverable,
+          receipt: {
+            vendor: { agent_id: hire?.agent_id, name: hire?.name ?? null },
+            vendor_cost: hire?.cost,
+            vendor_tx: hire?.tx,
+            validation: hire?.validation,
+            firm_margin: prov.economics?.margin_retained_or_absorbed
+          }
+        };
+      }
+      if (row?.state === "failed_refunded") {
+        return { error: { code: "DELIVERY_FAILED_REFUNDED", refund_tx: row.refund?.tx ?? null } };
+      }
+      await sleep(250);
+    }
+    // Charged but not finished in time: hand back the task_id so the caller can
+    // pull the result rather than losing the run.
+    return { error: { code: "EXPRESS_PENDING", task_id: taskId, detail: "not complete within timeout; poll get_result" } };
   }
 
   return { error: { code: "UNKNOWN_TOOL" } };
@@ -253,16 +349,44 @@ async function chargeGate(
   if (!PAID_TOOLS.has(name)) return { settled: null };
 
   if (name === "express_run") {
-    // Free rejection: no charge, no challenge, no write.
-    return {
-      status: 200,
-      body: {
-        error: {
-          code: "TODO_UNVERIFIED_EXPRESS_VENDOR_POOL",
-          detail: "Express job types lock after vendor reliability testing; the tool is not charged until then."
+    const parsed = z.object({ job_type: z.string(), params: z.record(z.any()).optional() }).safeParse(args);
+    if (!parsed.success) return { status: 200, body: { error: { code: "INVALID_ARGS", detail: "job_type is required" } } };
+    // Honest, free rejection until a human locks the pool (no charge, no write).
+    if (!expressEnabled()) {
+      return {
+        status: 200,
+        body: {
+          error: {
+            code: "EXPRESS_NOT_ENABLED",
+            detail:
+              "Firm Express is not live yet; its vendor pool locks after reliability testing (PLAN D4). Use get_quote + execute (Firm Projects) meanwhile."
+          }
         }
-      }
-    };
+      };
+    }
+    if (!expressJobTypes().includes(parsed.data.job_type) || !EXPRESS_CAPABILITY[parsed.data.job_type]) {
+      return {
+        status: 200,
+        body: {
+          error: {
+            code: "UNKNOWN_JOB_TYPE",
+            detail: `job_type '${parsed.data.job_type}' is not offered; available: ${expressJobTypes().join(", ")}`
+          }
+        }
+      };
+    }
+    if (chargingMode() === "bypass") {
+      console.warn(`[charging] BYPASS: serving express_run without payment (CHARGING_MODE is not "enforce")`);
+      return { settled: null };
+    }
+    const charged = await sellerCharge({
+      name,
+      amount: expressPriceUnits(),
+      decimals: 6,
+      resource: `firm:express:${parsed.data.job_type}`,
+      headers
+    });
+    return "status" in charged ? charged : { settled: charged.verified };
   }
 
   const charge = await chargeFor(name, args);
@@ -273,33 +397,54 @@ async function chargeGate(
     return { settled: null, quote: charge.quote };
   }
 
+  const charged = await sellerCharge({
+    name,
+    amount: charge.price.amount,
+    decimals: Number(charge.price.decimals ?? 6),
+    resource: `firm:${name}:${charge.quoteId}`,
+    headers
+  });
+  return "status" in charged ? charged : { settled: charged.verified, quote: charge.quote };
+}
+
+/**
+ * Build the 402 challenge for a fixed amount and verify the buyer's payment.
+ * Shared by execute (quoted price) and express_run (fixed price). Fails closed:
+ * an unconfigured seller returns 503, an unverified payment returns 402.
+ */
+async function sellerCharge(opts: {
+  name: string;
+  amount: string;
+  decimals: number;
+  resource: string;
+  headers: Record<string, string | string[] | undefined>;
+}): Promise<{ status: number; body: unknown; headers?: Record<string, string> } | { verified: VerifyResult }> {
   let seller;
   try {
     seller = sellerConfigFromEnv();
   } catch (error) {
     if (error instanceof ChargingNotConfigured) {
-      // Fail closed: an unconfigured seller cannot be paid, so it must not serve.
       return { status: 503, body: { error: { code: "CHARGING_NOT_CONFIGURED", detail: error.message } } };
     }
     throw error;
   }
 
   const requirements = buildRequirements({
-    amount: charge.price.amount,
-    decimals: Number(charge.price.decimals ?? 6),
+    amount: opts.amount,
+    decimals: opts.decimals,
     asset: seller.asset,
     network: seller.network,
     payTo: seller.payTo,
-    resource: `firm:${name}:${charge.quoteId}`,
-    description: `The Firm — ${name} at the quoted price`
+    resource: opts.resource,
+    description: `The Firm — ${opts.name}`
   });
 
-  const verification = await verifyPayment(paymentHeaderFrom(headers), requirements, {
+  const verification = await verifyPayment(paymentHeaderFrom(opts.headers), requirements, {
     facilitatorUrl: seller.facilitatorUrl
   });
 
   if (!verification.ok) {
-    console.warn(`[charging] rejected unpaid ${name} for ${charge.quoteId}: ${verification.reason}`);
+    console.warn(`[charging] rejected unpaid ${opts.name}: ${verification.reason}`);
     return {
       status: 402,
       headers: { "PAYMENT-REQUIRED": encodeRequirements(requirements) },
@@ -307,7 +452,7 @@ async function chargeGate(
     };
   }
 
-  return { settled: verification, quote: charge.quote };
+  return { verified: verification };
 }
 
 await ensureGatewayTables();

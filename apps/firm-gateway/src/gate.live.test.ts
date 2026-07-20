@@ -137,15 +137,78 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
     expect(after.rows[0].n).toBe(0);
   });
 
-  it("returns express_run's placeholder without charging for it", async () => {
+  it("rejects express_run honestly while its pool is unlocked, without charging", async () => {
     const { status, body } = await callTool("express_run", { job_type: "market_snapshot", params: {} });
     expect(status).toBe(200);
-    expect(body.error.code).toBe("TODO_UNVERIFIED_EXPRESS_VENDOR_POOL");
+    expect(body.error.code).toBe("EXPRESS_NOT_ENABLED");
   });
 
   it("does not gate the read-only tools", async () => {
     const { status, body } = await callTool("get_status", { task_id: "t_does_not_exist" });
     expect(status).toBe(200);
     expect(body.error.code).toBe("NOT_FOUND");
+  });
+});
+
+suite("gateway express boundary (EXPRESS_ENABLED, CHARGING_MODE=enforce)", () => {
+  let expressChild: ChildProcess | undefined;
+  let expressBase = "";
+  let expressDb: pg.Pool;
+
+  beforeAll(async () => {
+    const port = 8794;
+    expressBase = `http://127.0.0.1:${port}`;
+    expressDb = new pg.Pool({ connectionString: url });
+    expressChild = spawn(path.join(packageRoot, "node_modules/.bin/tsx"), ["src/server.ts"], {
+      cwd: packageRoot,
+      env: {
+        ...process.env,
+        PORT: String(port),
+        DATABASE_URL: url,
+        CHARGING_MODE: "enforce",
+        EXPRESS_ENABLED: "true",
+        EXPRESS_JOB_TYPES: "market_snapshot",
+        EXPRESS_PRICE_UNITS: "500000",
+        FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
+        FIRM_CHARGE_ASSET: "0xassettest",
+        FIRM_CHARGE_NETWORK: "eip155:196"
+      },
+      stdio: "ignore"
+    });
+    await waitForHealth(expressBase);
+  }, 40_000);
+
+  afterAll(async () => {
+    expressChild?.kill();
+    await expressDb?.end();
+  });
+
+  async function callExpress(tool: string, args: unknown, headers: Record<string, string> = {}) {
+    const response = await fetch(expressBase, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({ tool, args })
+    });
+    return { status: response.status, headers: response.headers, body: await response.json() };
+  }
+
+  it("charges the fixed Express price for an unpaid enabled call, and writes no job", async () => {
+    const before = await expressDb.query("SELECT count(*)::int AS n FROM firm_jobs WHERE goal LIKE 'Firm Express%'");
+    const attempt = await callExpress("express_run", { job_type: "market_snapshot", params: {} });
+
+    expect(attempt.status).toBe(402);
+    expect(attempt.body.error.code).toBe("PAYMENT_REQUIRED");
+    const header = attempt.headers.get("payment-required");
+    const requirements = JSON.parse(Buffer.from(header as string, "base64").toString("utf8"));
+    expect(requirements.accepts[0].amount).toBe("500000");
+
+    const after = await expressDb.query("SELECT count(*)::int AS n FROM firm_jobs WHERE goal LIKE 'Firm Express%'");
+    expect(after.rows[0].n).toBe(before.rows[0].n);
+  });
+
+  it("rejects an unknown job_type before charging", async () => {
+    const { status, body } = await callExpress("express_run", { job_type: "not_a_type", params: {} });
+    expect(status).toBe(200);
+    expect(body.error.code).toBe("UNKNOWN_JOB_TYPE");
   });
 });
