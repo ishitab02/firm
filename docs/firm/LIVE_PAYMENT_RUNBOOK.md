@@ -160,12 +160,77 @@ curl -s -X POST http://127.0.0.1:8787/refund \
   -d '{"task_id":"spike_001","to_address":"<user address>","amount":{"amount":"10000","decimals":6,"token":"USDT"}}'
 ```
 
-## 5. Still open, needs a human
+## 5. Spike target candidates — real, from a real scan
 
-1. **Which third-party ASP for the spike.** Asked four times in docs/status/F1.md
-   and still unanswered. Nothing in this repo will invent one.
-2. **`X402_ALLOWED_ASSETS`.** With it unset, a live run pays in whatever asset
-   the vendor names. It should be set for the spike.
-3. **The refund wallet decision** in §4.
-4. **Pricing mechanics** (INTERFACES 1B) remains OPEN. The gateway still defaults
+`tools/vendor-index/scan.js` now scans the live marketplace via
+`onchainos agent search`. The 2026-07-20 scan found 218 agents, 95 of them with
+a callable endpoint and 395 priced services. Full data in
+`data/marketplace-scan.json` (raw) and `data/vendor-index.json` (processed).
+
+The recommended spike target, and why:
+
+| | |
+|---|---|
+| Agent | **#2023 Onchain Data Explorer** (OKLink's own x402 MCP surface) |
+| Service | `Address Balance Snapshot` (service id 17305), maps to `market_snapshot` |
+| Endpoint | `https://www.oklink.com/api/v5/explorer/mcp/x402/get_address_balance_history` |
+| Price | `0.000015 USDT` = **15 base units**, 6 decimals |
+| Track record | 1572 completed sales, feedback 92.86, security 4.86, no derived risk flags |
+| Fee token | `0x779ded0c9e1022225f8e0630b35a9b54be713736` — USD₮0 (USDT), X Layer (chain 196), 6 decimals, **verified via `onchainos token info`**, not assumed |
+
+At 15 base units the entire spike costs less than a fifty-thousandth of a cent,
+which makes it the cheapest possible way to prove the whole path end to end.
+
+The service documents its own parameters: POST only (GET returns 405), requires
+`chainIndex`, `address`, `height`.
+
+Runner-up, if a second vendor is wanted: **#5524 API2ASP Factory** at 0.01 USDT
+(10000 base units), feedback 100, security 5, 12 sales.
+
+### The prepared spike call
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/pay-and-call \
+  -H 'content-type: application/json' \
+  -d '{
+    "task_id": "spike_001",
+    "subtask_id": "s0",
+    "vendor_endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_address_balance_history",
+    "tool": "get_address_balance_history",
+    "args": {"chainIndex": "1", "address": "0x0000000000000000000000000000000000000000", "height": "21000000"},
+    "max_amount": {"amount": "15", "decimals": 6, "token": "USDT"}
+  }' | jq .
+```
+
+with the procurer armed as in §3 and:
+
+```bash
+export X402_ALLOWED_ASSETS=0x779ded0c9e1022225f8e0630b35a9b54be713736
+export PER_CALL_MAX=1000 PER_TASK_MAX=1000 DAILY_MAX=10000
+```
+
+Note the endpoint already carries a path, so `toolUrl` will use it verbatim
+rather than appending `/tools/<tool>` — which is the behaviour the unit test
+`toolUrl` pins.
+
+**This has not been run.** It needs a human go and a funded `FIRM_WALLET_KEY`.
+
+## 6. Still open, needs a human
+
+1. **Go/no-go on the spike target above.** The "which ASP" question is now
+   answered with real data; what remains is a human saying yes.
+2. **`kya_base_score` is null for all 95 vendors.** apps/kya is absent from this
+   repo, and INTERFACES §4 requires the fixture-scoring bug be reconciled before
+   the index is trusted. The generator refuses to pass the marketplace's
+   `feedbackRate` off as a KYA score. Consequence: sourcing that filters on
+   `min_vendor_score` rejects every vendor today. Either bring apps/kya in, or
+   set `ALLOW_FEEDBACK_RATE_AS_BASE_SCORE=true`, which populates the score from
+   `feedbackRate` and stamps the substitution into the output file.
+3. **Capability coverage.** Of 395 priced services the keyword rules map 211 to
+   `market_snapshot` and only 4 to `token_launch`; 180 stay null. If Projects
+   needs real `token_launch` vendors, that thin result is worth a look before
+   the demo depends on it.
+4. **The refund wallet decision** in §4.
+5. **Pricing mechanics** (INTERFACES 1B) remains OPEN. The gateway still defaults
    to `TIERS`.
+6. **X402_FACILITATOR_URL** for the gateway's inbound charging (F2 blocker).
