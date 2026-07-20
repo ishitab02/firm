@@ -1,0 +1,87 @@
+{
+  "generated_at": "2026-07-20T19:00:00.387Z",
+  "source": {
+    "scan_file": "data/marketplace-scan.json",
+    "scanned_at": "2026-07-20T07:50:09.698Z",
+    "scan_source": "onchainos agent search"
+  },
+  "marketplace": {
+    "agents_scanned": 218,
+    "agents_online": 148,
+    "agents_offline": 70,
+    "agents_with_a_rating": 51,
+    "agents_without_a_rating": 167,
+    "mean_feedback_rate_among_rated": 94.11843137254903,
+    "agents_with_completed_sales": 81,
+    "total_completed_sales_across_marketplace": 20415,
+    "agents_reporting_a_security_rate": 52,
+    "category_breakdown": {
+      "Finance": 50,
+      "Software services": 157,
+      "Art creation": 4,
+      "World Cup🔥": 1,
+      "Lifestyle": 7
+    }
+  },
+  "firm_usable": {
+    "count": 15,
+    "note": "Vendors the Firm can currently source: callable endpoint, a priced service in a known capability, and a substitutable trust score. See data/vendor-index.json for provenance of each."
+  },
+  "top_vendors_by_completed_sales": [
+    {
+      "agent_id": "5421",
+      "name": "PixelBrief",
+      "sold_count": 10098
+    },
+    {
+      "agent_id": "5776",
+      "name": "ScoutGate",
+      "sold_count": 1633
+    },
+    {
+      "agent_id": "2023",
+      "name": "Onchain Data Explorer",
+      "sold_count": 1572
+    },
+    {
+      "agent_id": "3118",
+      "name": "CoinWM Open API",
+      "sold_count": 1566
+    },
+    {
+      "agent_id": "2013",
+      "name": "CoinAnk OpenAPI",
+      "sold_count": 1520
+    },
+    {
+      "agent_id": "5137",
+      "name": "记忆映画",
+      "sold_count": 1346
+    },
+    {
+      "agent_id": "5175",
+      "name": "Lumora Stock Data Hub",
+      "sold_count": 635
+    },
+    {
+      "agent_id": "3345",
+      "name": "这个能吃吗？",
+      "sold_count": 550
+    },
+    {
+      "agent_id": "2135",
+      "name": "Newsliquid",
+      "sold_count": 410
+    },
+    {
+      "agent_id": "2012",
+      "name": "Barker Yield Agent",
+      "sold_count": 343
+    }
+  ],
+  "disclosures": [
+    "Every figure is aggregated directly from the marketplace scan; no agent, rating, or sale is invented.",
+    "Ratings and sales counts are self-reported by the marketplace; absent values are counted as 'not disclosed', not zero.",
+    "The Firm's usable subset is small because most scanned agents lack a callable endpoint, a priced service, or any review history."
+  ]
+}
