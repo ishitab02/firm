@@ -178,15 +178,18 @@ async def refunding_node(state: FirmGraphState) -> FirmGraphState:
         return state
     procurer = state.get("procurer") or SimulatedProcurer()
     settings = get_settings()
+    # Refund the actual buyer captured at execute. Only fall back to the
+    # configured default when there is no verified payer (a bypassed run).
+    refund_to = task.quote.buyer_address or settings.default_refund_address
     refund = await procurer.refund(
         task_id=task.task_id,
-        to_address=settings.default_refund_address,
+        to_address=refund_to,
         amount=task.quote.price.model_dump(mode="json"),
     )
     task.refund = {
         "amount": task.quote.price.model_dump(mode="json"),
         "tx": refund["tx"],
-        "to_address": settings.default_refund_address,
+        "to_address": refund_to,
     }
     state["store"].transition(task, JobState.REFUNDED, f"refund issued: {refund['tx']}")
     return state

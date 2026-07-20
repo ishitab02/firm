@@ -86,7 +86,7 @@ async function loadQuote(quoteId: string): Promise<StoredQuote | undefined> {
   }
 }
 
-async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote) {
+async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, buyerAddress?: string) {
   if (name === "get_quote") {
     const request = quoteRequest.parse(args);
     const plan = estimatePlan(request.goal);
@@ -137,7 +137,16 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote) {
     // Carry the buyer's constraints onto the job's quote blob so the worker
     // sources under them. A quote loaded via the charge gate may not carry the
     // constraints column, so fall back to the quote's own embedded copy.
-    const jobQuote = { ...stored.quote, constraints: stored.constraints ?? stored.quote.constraints };
+    //
+    // buyer_address is the facilitator-verified payer, captured here so the
+    // refund path pays back the actual buyer rather than a placeholder. It is
+    // only present in enforce mode with a real settlement; a bypassed run has
+    // no real payer and refunds fall back to the configured default.
+    const jobQuote = {
+      ...stored.quote,
+      constraints: stored.constraints ?? stored.quote.constraints,
+      buyer_address: buyerAddress ?? stored.quote.buyer_address
+    };
     const client = pool();
     try {
       await client.query(
@@ -328,7 +337,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const result = await toolCall(method, args, gate.quote);
+    const result = await toolCall(method, args, gate.quote, gate.settled?.ok ? gate.settled.payer : undefined);
     const payload: Record<string, unknown> =
       PAID_TOOLS.has(method) && chargingMode() === "bypass" && result && typeof result === "object"
         ? { ...result, charging: "BYPASSED" }

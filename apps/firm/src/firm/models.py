@@ -55,6 +55,10 @@ class Quote(BaseModel):
     # worker honours them. Absent on a bare get_quote response and on legacy
     # jobs, where it defaults to the permissive baseline.
     constraints: Constraints = Field(default_factory=Constraints)
+    # The facilitator-verified payer, captured by the gateway at execute so a
+    # refund pays back the real buyer. None on bypassed runs (no real payer),
+    # where the refund falls back to the configured default address.
+    buyer_address: str | None = None
 
 
 class QuoteError(BaseModel):

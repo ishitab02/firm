@@ -41,6 +41,29 @@ async def run_refund_task() -> FirmTask:
     )
 
 
+def test_refund_targets_the_captured_buyer_address() -> None:
+    # A job that captured a real payer must refund to that payer, not the
+    # placeholder default.
+    strict = quote()
+    strict.constraints = Constraints(min_vendor_score=95)
+    strict.buyer_address = "0xBUYER0000000000000000000000000000000001"
+    task = FirmTask(task_id="t_refund_addr", goal="ship firm", quote=strict, state=JobState.PAID)
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            vendors=demo_vendors(prefix="test"),
+            store=InMemoryCheckpointStore(),
+            performance=PerformanceStore({}),
+            procurer=DemoProcurer(),
+        )
+    )
+
+    assert completed.state == JobState.FAILED_REFUNDED
+    assert completed.refund is not None
+    assert completed.refund["to_address"] == "0xBUYER0000000000000000000000000000000001"
+
+
 def test_buyer_constraints_reach_sourcing_and_filter_vendors() -> None:
     # Both demo vendors score below 95, so a strict buyer constraint must reject
     # both and drive a refund. If constraints were dropped on the way to
