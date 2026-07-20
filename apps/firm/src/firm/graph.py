@@ -52,7 +52,10 @@ def sourcing_node(state: FirmGraphState) -> FirmGraphState:
         state["vendors"],
         state["performance"].records,
         capability,
-        constraints=getattr(task, "constraints", None) or _default_constraints(),
+        # The buyer's constraints ride on the quote (min vendor score, banned
+        # categories). This is what makes a buyer's "min_vendor_score: 80"
+        # actually filter, rather than silently falling back to the default.
+        constraints=task.quote.constraints,
     )
     state["vendors"] = candidates
     state["rejected"] = [VendorRejection(**item) for item in rejected]
@@ -255,9 +258,3 @@ def build_graph() -> Any:
 
 def _validation_reason(result: ValidationResult) -> str:
     return "validation failed: " + ", ".join(failure.check for failure in result.failures)
-
-
-def _default_constraints():
-    from .models import Constraints
-
-    return Constraints()

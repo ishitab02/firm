@@ -51,6 +51,10 @@ class Quote(BaseModel):
     guarantee: str = "full refund if not delivered"
     quoted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     pricing_mode: Literal["QUOTED_AMOUNT", "TIERS"] = "TIERS"
+    # The buyer's sourcing constraints, carried on the stored job quote so the
+    # worker honours them. Absent on a bare get_quote response and on legacy
+    # jobs, where it defaults to the permissive baseline.
+    constraints: Constraints = Field(default_factory=Constraints)
 
 
 class QuoteError(BaseModel):

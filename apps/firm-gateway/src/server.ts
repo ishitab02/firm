@@ -62,17 +62,22 @@ function send(res: http.ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-export type StoredQuote = { goal: string; quote: Record<string, any> };
+export type StoredQuote = { goal: string; quote: Record<string, any>; constraints?: Record<string, any> };
 
 /**
  * Read a live quote. Reads are allowed before payment — we cannot build a 402
  * challenge without knowing the quoted price. It is *writes* that are gated.
+ *
+ * Constraints ride alongside: the buyer set them at get_quote time (min vendor
+ * score, banned categories, deadline) and the worker must honour them when it
+ * sources vendors. They are carried on the stored quote blob at execute time,
+ * not in a new firm_jobs column, so no schema migration is needed.
  */
 async function loadQuote(quoteId: string): Promise<StoredQuote | undefined> {
   const client = pool();
   try {
     const result = await client.query(
-      "SELECT goal, quote FROM firm_quotes WHERE quote_id = $1 AND valid_until > now()",
+      "SELECT goal, quote, constraints FROM firm_quotes WHERE quote_id = $1 AND valid_until > now()",
       [quoteId]
     );
     return result.rows[0];
@@ -129,13 +134,17 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote) {
     const stored = preloadedQuote ?? (await loadQuote(quoteId));
     if (!stored) return { error: { code: "QUOTE_NOT_FOUND" } };
     const taskId = `t_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
+    // Carry the buyer's constraints onto the job's quote blob so the worker
+    // sources under them. A quote loaded via the charge gate may not carry the
+    // constraints column, so fall back to the quote's own embedded copy.
+    const jobQuote = { ...stored.quote, constraints: stored.constraints ?? stored.quote.constraints };
     const client = pool();
     try {
       await client.query(
         `INSERT INTO firm_jobs
          (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
          VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
-        [taskId, quoteId, stored.goal, JSON.stringify(stored.quote)]
+        [taskId, quoteId, stored.goal, JSON.stringify(jobQuote)]
       );
     } finally {
       await client.end();
