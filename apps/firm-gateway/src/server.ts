@@ -13,6 +13,7 @@ import {
   VerifyResult
 } from "./charging.js";
 import { ensureGatewayTables, pool } from "./db.js";
+import { mcpDispatch } from "./mcp.js";
 import { quotePrice, estimatePlan, PricingMode } from "./pricing.js";
 import { usdt, units } from "./money.js";
 
@@ -327,8 +328,26 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const body = await readJson(req);
-    const method = body.method === "tools/call" ? body.params?.name : body.tool;
-    const args = body.method === "tools/call" ? body.params?.arguments ?? {} : body.args ?? {};
+    const dispatch = mcpDispatch(body);
+
+    if (dispatch.kind === "notification") {
+      res.writeHead(202);
+      res.end();
+      return;
+    }
+    if (dispatch.kind === "error") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id ?? null, error: { code: dispatch.code, message: dispatch.message } }));
+      return;
+    }
+    if (dispatch.kind === "protocol") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(body.id !== undefined ? { jsonrpc: "2.0", id: body.id, result: dispatch.result } : dispatch.result));
+      return;
+    }
+
+    const method = dispatch.name;
+    const args = dispatch.args;
 
     const gate = await chargeGate(method, args, req.headers);
     if ("status" in gate) {
