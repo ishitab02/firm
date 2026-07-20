@@ -246,3 +246,77 @@ describe("toolUrl", () => {
     expect(toolUrl("https://vendor.example/mcp", "market_snapshot")).toBe("https://vendor.example/mcp");
   });
 });
+
+describe("decimal-scale safety", () => {
+  it("refuses to pay when the vendor prices in different decimals than max_amount", async () => {
+    const order: string[] = [];
+    // 15 units at 18 decimals is a trillion times 15 units at 6 decimals. If
+    // the scales were compared as raw integers this would sail past the caps.
+    const server = http.createServer((req, res) => {
+      const payload = {
+        x402Version: 2,
+        accepts: [{ ...accepts("15")[0], extra: { decimals: 18 } }]
+      };
+      res.writeHead(402, { "content-type": "application/json", "PAYMENT-REQUIRED": b64(payload) });
+      res.end(JSON.stringify({ error: "payment required" }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    servers.push(server);
+    const { port } = server.address() as AddressInfo;
+
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: `http://127.0.0.1:${port}`, tool: "market_snapshot", args: {} },
+      {
+        ...baseOptions,
+        decimals: 6,
+        signer: fakeSigner(order),
+        verifyCaps: async () => {
+          order.push("verify");
+          return null;
+        }
+      }
+    );
+
+    expect(outcome).toMatchObject({ ok: false, error_code: "UNSUPPORTED_CHALLENGE" });
+    // Rejected before the caps were even consulted, and nothing was signed.
+    expect(order).toEqual([]);
+  });
+
+  it("proceeds when the vendor's declared decimals match", async () => {
+    const server = http.createServer((req, res) => {
+      const paid = req.headers["payment-signature"];
+      if (!paid) {
+        const payload = { x402Version: 2, accepts: [{ ...accepts("15")[0], extra: { decimals: 6 } }] };
+        res.writeHead(402, { "content-type": "application/json", "PAYMENT-REQUIRED": b64(payload) });
+        res.end("{}");
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "PAYMENT-RESPONSE": b64({ status: "success", transaction: "0xok" })
+      });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    servers.push(server);
+    const { port } = server.address() as AddressInfo;
+
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: `http://127.0.0.1:${port}`, tool: "market_snapshot", args: {} },
+      { ...baseOptions, decimals: 6, signer: fakeSigner(), verifyCaps: async () => null }
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.receipt.declared_decimals).toBe(6);
+  });
+
+  it("records null decimals when the vendor never declared a scale", async () => {
+    const { endpoint } = await startVendor({ challengeAmount: "100000" });
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: endpoint, tool: "market_snapshot", args: {} },
+      { ...baseOptions, signer: fakeSigner(), verifyCaps: async () => null }
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.receipt.declared_decimals).toBeNull();
+  });
+});

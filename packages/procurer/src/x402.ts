@@ -45,6 +45,17 @@ export type SelectedOffer = {
   network: string;
   asset: string;
   payTo: string;
+  /**
+   * Decimals the vendor declared for its asset, or null when it declared none.
+   *
+   * This matters more than it looks. Every cap comparison is raw base-unit
+   * integer arithmetic, which is only meaningful when both sides share a
+   * decimal scale. 15 units of a 6-decimal token and 15 units of an 18-decimal
+   * token differ by a factor of a trillion, so comparing the vendor's price
+   * against a max_amount on a different scale would authorise a payment
+   * astronomically larger than the caller intended.
+   */
+  declaredDecimals: number | null;
 };
 
 /**
@@ -175,8 +186,17 @@ export function selectOffer(
     scheme: String(best.entry.scheme),
     network: String(best.entry.network ?? ""),
     asset: String(best.entry.asset ?? ""),
-    payTo: String(best.entry.payTo ?? "")
+    payTo: String(best.entry.payTo ?? ""),
+    declaredDecimals: declaredDecimals(best.entry)
   };
+}
+
+/** The vendor's declared decimals for its asset, or null if it declared none. */
+export function declaredDecimals(entry: AcceptsEntry): number | null {
+  const raw = (entry.extra as Record<string, unknown> | undefined)?.decimals;
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 0) return raw;
+  if (typeof raw === "string" && /^\d+$/.test(raw)) return Number(raw);
+  return null;
 }
 
 /**

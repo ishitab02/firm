@@ -81,7 +81,7 @@ async function loadQuote(quoteId: string): Promise<StoredQuote | undefined> {
   }
 }
 
-async function toolCall(name: string, args: any) {
+async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote) {
   if (name === "get_quote") {
     const request = quoteRequest.parse(args);
     const plan = estimatePlan(request.goal);
@@ -123,7 +123,10 @@ async function toolCall(name: string, args: any) {
 
   if (name === "execute") {
     const quoteId = z.object({ quote_id: z.string() }).parse(args).quote_id;
-    const stored = await loadQuote(quoteId);
+    // Prefer the quote the payment was verified against. Re-reading here would
+    // reopen a window where a quote that expires between the charge and the
+    // insert leaves the caller charged and with no task.
+    const stored = preloadedQuote ?? (await loadQuote(quoteId));
     if (!stored) return { error: { code: "QUOTE_NOT_FOUND" } };
     const taskId = `t_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const client = pool();
@@ -207,7 +210,7 @@ async function chargeFor(name: string, args: any) {
   if (!price || typeof price.amount !== "string") {
     return { error: { code: "QUOTE_HAS_NO_PRICE" } };
   }
-  return { price, quoteId: parsed.data.quote_id };
+  return { price, quoteId: parsed.data.quote_id, quote: stored };
 }
 
 /**
@@ -224,7 +227,10 @@ async function chargeGate(
   name: string,
   args: any,
   headers: Record<string, string | string[] | undefined>
-): Promise<{ status: number; body: unknown; headers?: Record<string, string> } | { settled: VerifyResult | null }> {
+): Promise<
+  | { status: number; body: unknown; headers?: Record<string, string> }
+  | { settled: VerifyResult | null; quote?: StoredQuote }
+> {
   if (!PAID_TOOLS.has(name)) return { settled: null };
 
   if (name === "express_run") {
@@ -245,7 +251,7 @@ async function chargeGate(
 
   if (chargingMode() === "bypass") {
     console.warn(`[charging] BYPASS: serving paid tool "${name}" without payment (CHARGING_MODE is not "enforce")`);
-    return { settled: null };
+    return { settled: null, quote: charge.quote };
   }
 
   let seller;
@@ -282,7 +288,7 @@ async function chargeGate(
     };
   }
 
-  return { settled: verification };
+  return { settled: verification, quote: charge.quote };
 }
 
 await ensureGatewayTables();
@@ -313,7 +319,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const result = await toolCall(method, args);
+    const result = await toolCall(method, args, gate.quote);
     const payload: Record<string, unknown> =
       PAID_TOOLS.has(method) && chargingMode() === "bypass" && result && typeof result === "object"
         ? { ...result, charging: "BYPASSED" }

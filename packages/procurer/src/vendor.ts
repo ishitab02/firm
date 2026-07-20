@@ -27,6 +27,7 @@ export type VendorCallOutcome =
         scheme?: string;
         network?: string;
         asset?: string;
+        declared_decimals?: number | null;
         pay_to?: string;
         settlement?: Record<string, unknown> | null;
       };
@@ -153,6 +154,22 @@ export async function payAndCallVendor(
     throw error;
   }
 
+  // Every cap check below is raw base-unit integer arithmetic, which only means
+  // anything when the vendor's price and the caller's max_amount share a
+  // decimal scale. If the vendor declared a different one, the comparison is
+  // not merely wrong, it is dangerously wrong in the permissive direction — so
+  // refuse rather than convert. Converting would mean deciding on the caller's
+  // behalf what they meant to authorise.
+  if (offer.declaredDecimals !== null && offer.declaredDecimals !== options.decimals) {
+    return {
+      ok: false,
+      error_code: "UNSUPPORTED_CHALLENGE",
+      detail:
+        `vendor prices in ${offer.declaredDecimals} decimals but max_amount is in ${options.decimals}; ` +
+        "refusing to compare base units across different scales"
+    };
+  }
+
   // --- Nothing above this line has spent anything. Nothing below it may spend
   // --- until verifyCaps has approved the exact amount the vendor asked for.
   const capFailure = await options.verifyCaps(offer);
@@ -214,7 +231,13 @@ export async function payAndCallVendor(
       payment_response: replayHeaders["payment-response"] ?? "vendor returned no PAYMENT-RESPONSE header",
       scheme: signed.scheme,
       network: offer.network,
+      // The asset actually paid, as the vendor named it. `amount.token` is the
+      // caller's label for the same money; this is the on-chain truth, and it
+      // is what a reviewer should reconcile against.
       asset: offer.asset,
+      // null means the vendor never declared its scale, so `amount.decimals`
+      // above is the caller's assumption rather than a verified fact.
+      declared_decimals: offer.declaredDecimals,
       pay_to: offer.payTo,
       settlement
     },

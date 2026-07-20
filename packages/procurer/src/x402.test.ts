@@ -153,3 +153,37 @@ describe("v1 header assembly and receipt decoding", () => {
     expect(decodePaymentResponse("not base64 json")).toBeNull();
   });
 });
+
+describe("declared decimals", () => {
+  it("reads the vendor's declared decimals from extra", () => {
+    const challenge = parseChallenge(
+      { "payment-required": b64({ x402Version: 2, accepts: [exactEntry("100000", { extra: { decimals: 18 } })] }) },
+      {}
+    );
+    expect(selectOffer(challenge).declaredDecimals).toBe(18);
+  });
+
+  it("accepts a stringified decimals value", () => {
+    const challenge = parseChallenge(
+      { "payment-required": b64({ x402Version: 2, accepts: [exactEntry("1", { extra: { decimals: "6" } })] }) },
+      {}
+    );
+    expect(selectOffer(challenge).declaredDecimals).toBe(6);
+  });
+
+  it("reports null when the vendor declares no scale, rather than assuming one", () => {
+    const challenge = parseChallenge(
+      { "payment-required": b64({ x402Version: 2, accepts: [exactEntry("1")] }) },
+      {}
+    );
+    expect(selectOffer(challenge).declaredDecimals).toBeNull();
+  });
+
+  it("reports null for a nonsense decimals value", () => {
+    const challenge = parseChallenge(
+      { "payment-required": b64({ x402Version: 2, accepts: [exactEntry("1", { extra: { decimals: "six" } })] }) },
+      {}
+    );
+    expect(selectOffer(challenge).declaredDecimals).toBeNull();
+  });
+});
