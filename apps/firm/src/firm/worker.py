@@ -5,17 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Settings
-from .graph import (
-    FirmGraphState,
-    assembling_node,
-    booking_node,
-    planning_node,
-    procuring_node,
-    sourcing_node,
-    validating_node,
-    vetting_node,
-)
-from .graph import refunding_node
+from .graph import FirmGraphState, build_graph
 from .models import FirmTask, VendorIndexEntry
 from .procurer import HttpProcurer, Procurer
 from .sourcing import load_vendor_index
@@ -26,6 +16,18 @@ from .storage import PostgresCheckpointStore, PostgresPerformanceStore
 class WorkerResult:
     claimed: bool
     task: FirmTask | None = None
+
+
+# The compiled LangGraph is stateless across runs (all per-job state lives in the
+# invocation dict and in Postgres), so build it once and reuse it.
+_GRAPH = None
+
+
+def _graph():
+    global _GRAPH
+    if _GRAPH is None:
+        _GRAPH = build_graph()
+    return _GRAPH
 
 
 async def run_task(
@@ -45,15 +47,11 @@ async def run_task(
         "performance": performance,
         "procurer": procurer,
     }
-    state = planning_node(state)
-    state = sourcing_node(state)
-    state = vetting_node(state)
-    state = await procuring_node(state)
-    state = validating_node(state)
-    state = await refunding_node(state)
-    state = assembling_node(state)
-    state = booking_node(state)
-    return state["task"]
+    # Drive the run through the compiled LangGraph. Nodes mutate the shared task
+    # and checkpoint every transition to Postgres; the conditional edge out of
+    # `validating` routes delivered jobs to assembly and failed ones to refund.
+    result = await _graph().ainvoke(state)
+    return result["task"]
 
 
 async def run_one(

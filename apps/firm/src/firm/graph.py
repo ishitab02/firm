@@ -297,6 +297,13 @@ def build_provenance(
     )
 
 
+def _route_after_validating(state: FirmGraphState) -> str:
+    # Delivered -> assemble and book. Not delivered -> refund, then book the
+    # failed_refunded record. This is the exception path that the previous
+    # compiled graph left unwired, which is why nothing used it.
+    return "assembling" if state["task"].deliverable else "refunding"
+
+
 def build_graph() -> Any:
     try:
         from langgraph.graph import END, StateGraph
@@ -310,8 +317,8 @@ def build_graph() -> Any:
     graph.add_node("procuring", procuring_node)
     graph.add_node("validating", validating_node)
     graph.add_node("assembling", assembling_node)
-    graph.add_node("booking", booking_node)
     graph.add_node("refunding", refunding_node)
+    graph.add_node("booking", booking_node)
     graph.set_entry_point("planning")
     graph.add_edge("planning", "sourcing")
     graph.add_edge("sourcing", "vetting")
@@ -319,10 +326,11 @@ def build_graph() -> Any:
     graph.add_edge("procuring", "validating")
     graph.add_conditional_edges(
         "validating",
-        lambda state: "assembling" if state["task"].deliverable else "booking",
-        {"assembling": "assembling", "booking": "booking"},
+        _route_after_validating,
+        {"assembling": "assembling", "refunding": "refunding"},
     )
     graph.add_edge("assembling", "booking")
+    graph.add_edge("refunding", "booking")
     graph.add_edge("booking", END)
     return graph.compile()
 
