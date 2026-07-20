@@ -2,10 +2,55 @@ import asyncio
 from datetime import datetime, timezone
 
 from firm.cli import DemoProcurer, demo_vendors
-from firm.models import Constraints, FirmTask, JobState, Money, Quote
+from firm.models import (
+    Constraints,
+    FirmTask,
+    JobState,
+    Money,
+    PayAndCallRequest,
+    PayAndCallResponse,
+    Quote,
+    VendorIndexEntry,
+    VendorService,
+)
 from firm.sourcing import PerformanceStore
 from firm.storage import InMemoryCheckpointStore
 from firm.worker import run_task
+
+
+class AlwaysGoodProcurer:
+    """Delivers a fresh, valid result for whatever subtask is requested."""
+
+    async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
+        return PayAndCallResponse(
+            ok=True,
+            result={
+                "kind": request.tool,
+                "checklist": ["delivered item"],
+                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            },
+            receipt={
+                "amount": request.max_amount.model_dump(),
+                "tx": f"SIMULATED:{request.subtask_id}",
+                "payment_response": "SIMULATED",
+            },
+            latency_ms=10,
+        )
+
+    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, str]:
+        return {"tx": f"SIMULATED:refund:{task_id}"}
+
+
+def _specialist(agent_id: str, capability: str, tool: str) -> VendorIndexEntry:
+    return VendorIndexEntry(
+        agent_id=agent_id,
+        name=agent_id,
+        endpoint=f"http://mock.local/{agent_id}",
+        services=[VendorService(tool=tool, capability=capability, price=Money.usdt(100_000))],
+        kya_base_score=90,
+        flags=[],
+        last_verified_at="2026-07-18T00:00:00Z",
+    )
 
 
 def quote() -> Quote:
@@ -39,6 +84,69 @@ async def run_refund_task() -> FirmTask:
         performance=PerformanceStore({}),
         procurer=DemoProcurer(),
     )
+
+
+def test_multi_subtask_job_hires_a_specialist_per_subtask() -> None:
+    two_subtasks = Quote(
+        quote_id="q_multi",
+        price=Money.usdt(1_000_000),
+        plan_summary=[
+            {"subtask": "market snapshot", "capability": "market_snapshot"},
+            {"subtask": "launch brief", "capability": "token_launch"},
+        ],
+        valid_until=datetime.now(timezone.utc),
+    )
+    task = FirmTask(task_id="t_multi", goal="market + launch", quote=two_subtasks, state=JobState.PAID)
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            vendors=[
+                _specialist("market-vendor", "market_snapshot", "market_snapshot"),
+                _specialist("launch-vendor", "token_launch", "launch_brief"),
+            ],
+            store=InMemoryCheckpointStore(),
+            performance=PerformanceStore({}),
+            procurer=AlwaysGoodProcurer(),
+        )
+    )
+
+    assert completed.state == JobState.COMPLETE
+    assert completed.deliverable is not None
+    subtasks = completed.deliverable["result"]["subtasks"]
+    assert [s["capability"] for s in subtasks] == ["market_snapshot", "token_launch"]
+    assert [s["agent_id"] for s in subtasks] == ["market-vendor", "launch-vendor"]
+    # One hire per subtask, and provenance economics summed both vendor costs.
+    assert completed.provenance is not None
+    assert len(completed.provenance.hires) == 2
+
+
+def test_multi_subtask_job_refunds_if_any_subtask_cannot_be_filled() -> None:
+    # Only a market vendor exists; the launch subtask has no candidate, so the
+    # whole job must refund rather than deliver a partial result.
+    two_subtasks = Quote(
+        quote_id="q_partial",
+        price=Money.usdt(1_000_000),
+        plan_summary=[
+            {"subtask": "market snapshot", "capability": "market_snapshot"},
+            {"subtask": "launch brief", "capability": "token_launch"},
+        ],
+        valid_until=datetime.now(timezone.utc),
+    )
+    task = FirmTask(task_id="t_partial", goal="market + launch", quote=two_subtasks, state=JobState.PAID)
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            vendors=[_specialist("market-vendor", "market_snapshot", "market_snapshot")],
+            store=InMemoryCheckpointStore(),
+            performance=PerformanceStore({}),
+            procurer=AlwaysGoodProcurer(),
+        )
+    )
+
+    assert completed.state == JobState.FAILED_REFUNDED
+    assert completed.deliverable is None
 
 
 def test_refund_targets_the_captured_buyer_address() -> None:

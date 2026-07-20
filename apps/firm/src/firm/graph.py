@@ -24,6 +24,8 @@ from .validation import validate
 class FirmGraphState(TypedDict, total=False):
     task: FirmTask
     vendors: list[VendorIndexEntry]
+    candidates_by_capability: dict[str, list[VendorIndexEntry]]
+    subtask_deliverables: list[dict[str, Any]]
     rejected: list[VendorRejection]
     fired: list[VendorFiring]
     hires: list[HireReceipt]
@@ -47,19 +49,45 @@ def planning_node(state: FirmGraphState) -> FirmGraphState:
 def sourcing_node(state: FirmGraphState) -> FirmGraphState:
     task = state["task"]
     store = state["store"]
-    capability = task.quote.plan_summary[0].capability
-    candidates, rejected = rank_candidates(
-        state["vendors"],
-        state["performance"].records,
-        capability,
-        # The buyer's constraints ride on the quote (min vendor score, banned
-        # categories). This is what makes a buyer's "min_vendor_score: 80"
-        # actually filter, rather than silently falling back to the default.
-        constraints=task.quote.constraints,
+    performances = state["performance"].records
+    # The buyer's constraints ride on the quote (min vendor score, banned
+    # categories). This is what makes a buyer's "min_vendor_score: 80" actually
+    # filter, rather than silently falling back to the default.
+    constraints = task.quote.constraints
+
+    # Rank candidates per distinct capability the plan needs, so a multi-subtask
+    # job (e.g. "market + launch") can hire a different specialist per subtask.
+    index = state["vendors"]
+    by_capability: dict[str, list[VendorIndexEntry]] = {}
+    accepted_union: list[VendorIndexEntry] = []
+    seen_accept: set[str] = set()
+    rejected_rows: list[dict[str, str]] = []
+    seen_reject: set[tuple[str, str]] = set()
+
+    for item in task.quote.plan_summary:
+        capability = item.capability
+        if capability in by_capability:
+            continue
+        candidates, rejected = rank_candidates(index, performances, capability, constraints)
+        by_capability[capability] = candidates
+        for vendor in candidates:
+            if vendor.agent_id not in seen_accept:
+                seen_accept.add(vendor.agent_id)
+                accepted_union.append(vendor)
+        for row in rejected:
+            key = (row["agent_id"], row["reason"])
+            if key not in seen_reject:
+                seen_reject.add(key)
+                rejected_rows.append(row)
+
+    state["candidates_by_capability"] = by_capability
+    state["vendors"] = accepted_union
+    state["rejected"] = [VendorRejection(**row) for row in rejected_rows]
+    store.transition(
+        task,
+        JobState.SOURCING,
+        f"ranked candidates for {len(by_capability)} capabilit{'y' if len(by_capability) == 1 else 'ies'}",
     )
-    state["vendors"] = candidates
-    state["rejected"] = [VendorRejection(**item) for item in rejected]
-    store.transition(task, JobState.SOURCING, f"ranked {len(candidates)} candidate vendors")
     return state
 
 
@@ -73,10 +101,40 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
     task = state["task"]
     store = state["store"]
     procurer = state.get("procurer") or SimulatedProcurer()
-    subtask = task.quote.plan_summary[0]
+    by_capability = state.get("candidates_by_capability", {})
 
-    store.transition(task, JobState.PROCURING, "starting vendor procurement", subtask.subtask)
-    for vendor in state["vendors"]:
+    store.transition(task, JobState.PROCURING, "starting vendor procurement")
+    subtask_results: list[dict[str, Any]] = []
+
+    # Every subtask must be delivered. If any one exhausts its candidates the
+    # whole job fails and refunds — the Projects guarantee is all-or-nothing.
+    for subtask in task.quote.plan_summary:
+        delivered = await _procure_subtask(state, subtask, by_capability.get(subtask.capability, []), procurer)
+        if delivered is None:
+            state["error"] = f"candidates exhausted for subtask '{subtask.subtask}'"
+            return state
+        subtask_results.append(delivered)
+
+    state["subtask_deliverables"] = subtask_results
+    # A single-subtask job delivers the raw vendor result (unchanged); a
+    # multi-subtask job delivers each subtask's result under its own key.
+    task.deliverable = (
+        subtask_results[0]["result"] if len(subtask_results) == 1 else {"subtasks": subtask_results}
+    )
+    return state
+
+
+async def _procure_subtask(
+    state: FirmGraphState,
+    subtask: Any,
+    candidates: list[VendorIndexEntry],
+    procurer: Procurer,
+) -> dict[str, Any] | None:
+    """Fire-and-rehire down the candidate list for one subtask. Returns the
+    delivered record, or None when every candidate failed."""
+    task = state["task"]
+    store = state["store"]
+    for vendor in candidates:
         service = next(
             (candidate for candidate in vendor.services if candidate.capability == subtask.capability),
             None,
@@ -87,7 +145,7 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
             PayAndCallRequest(
                 vendor_endpoint=vendor.endpoint,
                 tool=service.tool,
-                args={"goal": task.goal},
+                args={"goal": task.goal, "subtask": subtask.subtask},
                 max_amount=service.price,
                 task_id=task.task_id,
                 subtask_id=subtask.subtask,
@@ -98,14 +156,15 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
             continue
 
         validation = validate(response.result, {"acceptance": subtask.subtask})
-        hire = HireReceipt(
-            agent_id=vendor.agent_id,
-            subtask=subtask.subtask,
-            cost=response.receipt.amount,
-            tx=response.receipt.tx,
-            validation={"passed": validation.passed, "checks": validation.checks_run},
+        state.setdefault("hires", []).append(
+            HireReceipt(
+                agent_id=vendor.agent_id,
+                subtask=subtask.subtask,
+                cost=response.receipt.amount,
+                tx=response.receipt.tx,
+                validation={"passed": validation.passed, "checks": validation.checks_run},
+            )
         )
-        state.setdefault("hires", []).append(hire)
 
         if not validation.passed:
             state["performance"].record_validation_failure(vendor.agent_id)
@@ -126,11 +185,20 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
             continue
 
         state["performance"].record_success(vendor.agent_id)
-        task.deliverable = response.result
-        return state
+        store.transition(
+            task,
+            JobState.PROCURING,
+            f"delivered subtask '{subtask.subtask}' via {vendor.agent_id}",
+            subtask.subtask,
+        )
+        return {
+            "subtask": subtask.subtask,
+            "capability": subtask.capability,
+            "agent_id": vendor.agent_id,
+            "result": response.result,
+        }
 
-    state["error"] = "candidates exhausted"
-    return state
+    return None
 
 
 def validating_node(state: FirmGraphState) -> FirmGraphState:
