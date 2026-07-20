@@ -131,31 +131,43 @@ async function handlePayAndCall(body: unknown) {
     return response;
   }
 
-  const outcome = await payAndCallVendor(
-    { vendorEndpoint: request.vendor_endpoint, tool: request.tool, args: request.args },
-    {
-      signer: realSigner(),
-      allowedAssets: allowedAssets(),
-      decimals: request.max_amount.decimals,
-      token: request.max_amount.token,
-      timeoutMs: Number(process.env.VENDOR_TIMEOUT_MS ?? 60_000),
-      onSigned: () => markSigned(idempotencyKey),
-      // The reservation already cleared the ceiling against the aggregate caps.
-      // The only thing left to prove is that what the vendor actually asked for
-      // is not more than what the caller authorised.
-      verifyCaps: async (offer) => {
-        if (offer.amountUnits > ceilingUnits) {
-          return {
-            detail: `vendor asked for ${offer.amountUnits} base units, above the caller's max_amount of ${ceilingUnits}`
-          };
+  let outcome;
+  try {
+    outcome = await payAndCallVendor(
+      { vendorEndpoint: request.vendor_endpoint, tool: request.tool, args: request.args },
+      {
+        signer: realSigner(),
+        allowedAssets: allowedAssets(),
+        decimals: request.max_amount.decimals,
+        token: request.max_amount.token,
+        timeoutMs: Number(process.env.VENDOR_TIMEOUT_MS ?? 60_000),
+        onSigned: () => markSigned(idempotencyKey),
+        // The reservation already cleared the ceiling against the aggregate caps.
+        // The only thing left to prove is that what the vendor actually asked for
+        // is not more than what the caller authorised.
+        verifyCaps: async (offer) => {
+          if (offer.amountUnits > ceilingUnits) {
+            return {
+              detail: `vendor asked for ${offer.amountUnits} base units, above the caller's max_amount of ${ceilingUnits}`
+            };
+          }
+          if (offer.amountUnits > caps.perCallMax) {
+            return { detail: "per-call cap would be exceeded before payment" };
+          }
+          return null;
         }
-        if (offer.amountUnits > caps.perCallMax) {
-          return { detail: "per-call cap would be exceeded before payment" };
-        }
-        return null;
       }
-    }
-  );
+    );
+  } catch (error) {
+    // An unexpected throw would otherwise strand the row in `reserved`, where
+    // it blocks every retry of this subtask with IN_FLIGHT and permanently
+    // consumes cap budget. Release it — releaseCall only touches `reserved`
+    // rows, so a throw that happened after signing is still left alone.
+    const failure = { ok: false as const, error_code: "PROCURER_ERROR", detail: String(error) };
+    await releaseCall(idempotencyKey, failure);
+    await recordSignedFailure(idempotencyKey, failure);
+    return failure;
+  }
 
   if (outcome.ok) {
     await settleCall(idempotencyKey, outcome.receipt.amount, outcome);

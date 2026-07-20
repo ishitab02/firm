@@ -203,6 +203,35 @@ suite("procurer reservations", () => {
     expect((await reserveCall(request, 100_000, caps)).kind).toBe("reserved");
   });
 
+  it("reclaims a reservation left behind by a procurer that died mid-call", async () => {
+    const request = { ...call("test_stale", "s0"), ceiling: usdt(50_000) };
+    expect((await reserveCall(request, 50_000, caps)).kind).toBe("reserved");
+    // A fresh reservation still blocks a concurrent caller.
+    expect((await reserveCall(request, 50_000, caps)).kind).toBe("in_flight");
+
+    await pool().query(
+      "UPDATE procurer_calls SET updated_at = now() - interval '2 hours' WHERE idempotency_key = $1",
+      [request.idempotencyKey]
+    );
+
+    expect((await reserveCall(request, 50_000, caps)).kind).toBe("reserved");
+    // Reclaimed, not duplicated: the budget is still one call's worth.
+    const snapshot = await spendSnapshot();
+    expect(snapshot.spent_today).toBe(50_000);
+  });
+
+  it("never reclaims a signed row, however old", async () => {
+    const request = { ...call("test_stale_signed", "s0"), ceiling: usdt(50_000) };
+    await reserveCall(request, 50_000, caps);
+    await markSigned(request.idempotencyKey);
+    await pool().query(
+      "UPDATE procurer_calls SET updated_at = now() - interval '30 days' WHERE idempotency_key = $1",
+      [request.idempotencyKey]
+    );
+
+    expect(await reserveCall(request, 50_000, caps)).toMatchObject({ kind: "needs_human" });
+  });
+
   it("does not free the budget for a call that already signed", async () => {
     const request = { ...call("test_no_release", "s0"), ceiling: usdt(100_000) };
     await reserveCall(request, 100_000, caps);

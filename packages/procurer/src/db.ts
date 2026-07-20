@@ -60,6 +60,15 @@ export async function withTransaction<T>(body: (client: pg.PoolClient) => Promis
 export const SPEND_LOCK_ID = 84020001;
 
 /**
+ * How long a `reserved` row may sit before another caller may reclaim it.
+ * Must comfortably exceed the vendor timeout, or a slow-but-alive call could
+ * have its reservation stolen while it is still working.
+ */
+export function reservationStaleAfterSeconds(): number {
+  return Number(process.env.RESERVATION_STALE_AFTER_SECONDS ?? 900);
+}
+
+/**
  * `state` is the whole safety story for a call row:
  *   reserved — funds are claimed against the caps, nothing signed yet. Safe to
  *              release if the call fails.
@@ -133,9 +142,12 @@ export async function reserveCall(
   return withTransaction<ReserveOutcome>(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock($1)", [SPEND_LOCK_ID]);
 
-    const existing = await client.query("SELECT state, response FROM procurer_calls WHERE idempotency_key = $1", [
-      request.idempotencyKey
-    ]);
+    const existing = await client.query(
+      `SELECT state, response,
+              EXTRACT(EPOCH FROM (now() - updated_at))::int AS age_seconds
+       FROM procurer_calls WHERE idempotency_key = $1`,
+      [request.idempotencyKey]
+    );
     const row = existing.rows[0];
     if (row) {
       if (row.state === "settled") return { kind: "replay", response: row.response };
@@ -146,8 +158,16 @@ export async function reserveCall(
             "a payment authorization was already signed for this (task_id, subtask_id, vendor_endpoint) and its settlement is unconfirmed; refusing to sign a second one"
         };
       }
-      if (row.state === "reserved") return { kind: "in_flight" };
-      // released -> fall through and re-reserve under the same key.
+      if (row.state === "reserved") {
+        // A procurer that died mid-call leaves its reservation behind, where it
+        // blocks every retry and holds cap budget forever. Reclaim it once it is
+        // older than any call could still plausibly be. `signed` rows are
+        // deliberately never reclaimed, however old — that money may be gone.
+        if (Number(row.age_seconds ?? 0) < reservationStaleAfterSeconds()) {
+          return { kind: "in_flight" };
+        }
+      }
+      // released, or a stale reservation -> re-reserve under the same key.
       await client.query("DELETE FROM procurer_calls WHERE idempotency_key = $1", [request.idempotencyKey]);
     }
 
