@@ -106,16 +106,11 @@ export type StoredQuote = { goal: string; quote: Record<string, any>; constraint
  * not in a new firm_jobs column, so no schema migration is needed.
  */
 async function loadQuote(quoteId: string): Promise<StoredQuote | undefined> {
-  const client = pool();
-  try {
-    const result = await client.query(
-      "SELECT goal, quote, constraints FROM firm_quotes WHERE quote_id = $1 AND valid_until > now()",
-      [quoteId]
-    );
-    return result.rows[0];
-  } finally {
-    await client.end();
-  }
+  const result = await pool().query(
+    "SELECT goal, quote, constraints FROM firm_quotes WHERE quote_id = $1 AND valid_until > now()",
+    [quoteId]
+  );
+  return result.rows[0];
 }
 
 async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, buyerAddress?: string) {
@@ -138,23 +133,18 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
       quoted_at: new Date().toISOString(),
       pricing_mode: pricingMode()
     };
-    const client = pool();
-    try {
-      await client.query(
-        `INSERT INTO firm_quotes (quote_id, goal, quote, budget_cap, constraints, valid_until)
-         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6)`,
-        [
-          quote.quote_id,
-          request.goal,
-          JSON.stringify(quote),
-          JSON.stringify(request.budget_cap),
-          JSON.stringify(request.constraints),
-          quote.valid_until
-        ]
-      );
-    } finally {
-      await client.end();
-    }
+    await pool().query(
+      `INSERT INTO firm_quotes (quote_id, goal, quote, budget_cap, constraints, valid_until)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6)`,
+      [
+        quote.quote_id,
+        request.goal,
+        JSON.stringify(quote),
+        JSON.stringify(request.budget_cap),
+        JSON.stringify(request.constraints),
+        quote.valid_until
+      ]
+    );
     return quote;
   }
 
@@ -179,52 +169,37 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
       constraints: stored.constraints ?? stored.quote.constraints,
       buyer_address: buyerAddress ?? stored.quote.buyer_address
     };
-    const client = pool();
-    try {
-      await client.query(
-        `INSERT INTO firm_jobs
-         (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
-         VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
-        [taskId, quoteId, stored.goal, JSON.stringify(jobQuote)]
-      );
-    } finally {
-      await client.end();
-    }
+    await pool().query(
+      `INSERT INTO firm_jobs
+       (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
+       VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
+      [taskId, quoteId, stored.goal, JSON.stringify(jobQuote)]
+    );
     return { task_id: taskId, state: "planning" };
   }
 
   if (name === "get_status") {
     const taskId = z.object({ task_id: z.string() }).parse(args).task_id;
-    const client = pool();
-    try {
-      const result = await client.query("SELECT state, progress FROM firm_jobs WHERE task_id = $1", [taskId]);
-      return result.rows[0] ?? { error: { code: "NOT_FOUND" } };
-    } finally {
-      await client.end();
-    }
+    const result = await pool().query("SELECT state, progress FROM firm_jobs WHERE task_id = $1", [taskId]);
+    return result.rows[0] ?? { error: { code: "NOT_FOUND" } };
   }
 
   if (name === "get_result") {
     const taskId = z.object({ task_id: z.string() }).parse(args).task_id;
-    const client = pool();
-    try {
-      const result = await client.query(
-        `SELECT state, deliverable, provenance, refund FROM firm_jobs
-         WHERE task_id = $1`,
-        [taskId]
-      );
-      const row = result.rows[0];
-      if (!row) return { error: { code: "NOT_FOUND" } };
-      if (row.state === "failed_refunded" && row.provenance) {
-        return { error: { code: "REFUNDED", refund: row.refund, provenance: row.provenance } };
-      }
-      if (row.state === "complete" && row.deliverable && row.provenance) {
-        return { deliverable: row.deliverable, provenance: row.provenance };
-      }
-      return { error: { code: "NOT_READY_OR_NOT_FOUND" } };
-    } finally {
-      await client.end();
+    const result = await pool().query(
+      `SELECT state, deliverable, provenance, refund FROM firm_jobs
+       WHERE task_id = $1`,
+      [taskId]
+    );
+    const row = result.rows[0];
+    if (!row) return { error: { code: "NOT_FOUND" } };
+    if (row.state === "failed_refunded" && row.provenance) {
+      return { error: { code: "REFUNDED", refund: row.refund, provenance: row.provenance } };
     }
+    if (row.state === "complete" && row.deliverable && row.provenance) {
+      return { deliverable: row.deliverable, provenance: row.provenance };
+    }
+    return { error: { code: "NOT_READY_OR_NOT_FOUND" } };
   }
 
   if (name === "express_run") {
@@ -250,33 +225,22 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
       express: true,
       buyer_address: buyerAddress
     };
-    const insert = pool();
-    try {
-      await insert.query(
-        `INSERT INTO firm_jobs
-         (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
-         VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
-        [taskId, jobQuote.quote_id, `Firm Express: ${parsed.data.job_type}`, JSON.stringify(jobQuote)]
-      );
-    } finally {
-      await insert.end();
-    }
+    await pool().query(
+      `INSERT INTO firm_jobs
+       (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
+       VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
+      [taskId, jobQuote.quote_id, `Firm Express: ${parsed.data.job_type}`, JSON.stringify(jobQuote)]
+    );
 
     // A worker (firm-worker run) processes the paid job; poll for the terminal
     // state and shape the Express receipt from the provenance.
     const deadline = Date.now() + expressTimeoutMs();
     while (Date.now() < deadline) {
-      const client = pool();
-      let row: any;
-      try {
-        const result = await client.query(
-          "SELECT state, deliverable, provenance, refund FROM firm_jobs WHERE task_id = $1",
-          [taskId]
-        );
-        row = result.rows[0];
-      } finally {
-        await client.end();
-      }
+      const result = await pool().query(
+        "SELECT state, deliverable, provenance, refund FROM firm_jobs WHERE task_id = $1",
+        [taskId]
+      );
+      const row: any = result.rows[0];
       if (row?.state === "complete" && row.provenance) {
         const prov = row.provenance;
         const hire = Array.isArray(prov.hires) && prov.hires.length ? prov.hires[prov.hires.length - 1] : undefined;
