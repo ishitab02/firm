@@ -53,10 +53,6 @@ export function sellerConfigFromEnv() {
   return { payTo, asset, network, facilitatorUrl: process.env.X402_FACILITATOR_URL };
 }
 
-export function chargingEnabled(): boolean {
-  return process.env.CHARGING_ENABLED === "true";
-}
-
 /** Build the `accepts` payload for a 402 response. */
 export function buildRequirements(spec: ChargeSpec): PaymentRequirements {
   return {
