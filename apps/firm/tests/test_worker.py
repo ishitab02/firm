@@ -327,3 +327,93 @@ def test_a_vendor_that_documents_nothing_is_not_blocked():
         documented_example_args={"args": {}, "source": "x"},
     )
     assert missing_documented_params(empty_doc, {}) == []
+
+
+class CapRefusingProcurer:
+    """Refuses every call with CAP_EXCEEDED — the Firm's own spending limit.
+
+    This is Clawby #3209 in miniature: a vendor that is alive, conformant, and
+    asking 600x its listing. Our cap correctly declines to sign. The vendor did
+    nothing wrong and must not be penalised for it.
+    """
+
+    async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
+        return PayAndCallResponse(
+            ok=False,
+            error_code="CAP_EXCEEDED",
+            detail="vendor asked for 3000000 base units, above the caller's max_amount of 5000",
+        )
+
+    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, str]:
+        return {"tx": f"SIMULATED:refund:{task_id}"}
+
+
+class TimingOutProcurer:
+    """A genuine vendor-side failure, which SHOULD be penalised."""
+
+    async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
+        return PayAndCallResponse(ok=False, error_code="VENDOR_TIMEOUT", detail="probe failed: fetch failed")
+
+    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, str]:
+        return {"tx": f"SIMULATED:refund:{task_id}"}
+
+
+async def _run_with(procurer, performance: PerformanceStore) -> FirmTask:
+    task = FirmTask(task_id="t_fault_attribution", goal="ship firm", quote=quote(), state=JobState.PAID)
+    return await run_task(
+        task,
+        vendors=[_specialist("v-1", "token_launch", "launch")],
+        store=InMemoryCheckpointStore(),
+        performance=performance,
+        procurer=procurer,
+    )
+
+
+def test_our_own_cap_is_never_recorded_as_a_vendor_failure() -> None:
+    """The G2 lesson, applied to procurement instead of validation.
+
+    Recording our spending limit as the vendor's timeout writes a fabricated
+    accusation into both the trust database and the provenance receipt.
+    """
+    performance = PerformanceStore({})
+    completed = asyncio.run(_run_with(CapRefusingProcurer(), performance))
+
+    assert "v-1" not in performance.records or performance.records["v-1"].calls == 0
+    assert performance.records.get("v-1") is None or performance.records["v-1"].adjustment == 0
+
+    # It still appears in the receipt — silently dropping it would be its own
+    # kind of dishonesty — but as a rejection carrying the real reason.
+    assert completed.provenance is not None
+    reasons = [row.reason for row in completed.provenance.vendors_rejected if row.agent_id == "v-1"]
+    assert reasons and "CAP_EXCEEDED" in reasons[0]
+    assert not any(row.agent_id == "v-1" for row in completed.provenance.vendors_fired)
+
+
+def test_a_real_vendor_timeout_is_still_recorded_against_the_vendor() -> None:
+    """The other half. Refusing to penalise anything would be just as wrong:
+    the Darwinian layer would stop learning."""
+    performance = PerformanceStore({})
+    asyncio.run(_run_with(TimingOutProcurer(), performance))
+
+    record = performance.records["v-1"]
+    assert record.timeouts == 1
+    assert record.adjustment == -10
+
+
+def test_a_refunded_job_reports_absorbed_not_retained() -> None:
+    """A refunded job earned nothing: the quoted price went back to the buyer.
+
+    Computing margin against the quoted price regardless of outcome made the
+    receipt claim we retained money we had just given back — in our favour, on
+    the number that carries the whole guarantee story.
+    """
+    completed = asyncio.run(run_refund_task())
+
+    assert completed.provenance is not None
+    economics = completed.provenance.economics
+    assert completed.provenance.guarantee_status == "refunded"
+    assert economics.margin_retained_or_absorbed["sign"] == "absorbed"
+
+    # And the magnitude is exactly what we paid out, not the quoted price.
+    outlay = economics.actual_vendor_costs.units() + completed.provenance.books.cost.units()
+    assert economics.margin_retained_or_absorbed["amount"] == str(outlay)
