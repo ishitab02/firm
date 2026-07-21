@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-20T18:38:09.406Z",
+  "generated_at": "2026-07-21T07:06:23.234Z",
   "provenance": {
     "scan_file": "data/marketplace-scan.json",
     "scanned_at": "2026-07-20T07:50:09.698Z",
@@ -39,7 +39,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Search prediction markets across Polymarket and other supported venues; returns matched market metadata for trading and research agents.\nProvide: 1. q (search query). Optional: status, venue, limit."
+          "description": "Search prediction markets across Polymarket and other supported venues; returns matched market metadata for trading and research agents.\nProvide: 1. q (search query). Optional: status, venue, limit.",
+          "documented_example_args": null
         },
         {
           "tool": "Predexon Matched Markets",
@@ -56,7 +57,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Return exact matched prediction-market pairs across venues with cross-venue pricing context for arbitrage and comparison agents.\nProvide: none required. Optional: active_only, min_similarity, sort_by, venue, limit."
+          "description": "Return exact matched prediction-market pairs across venues with cross-venue pricing context for arbitrage and comparison agents.\nProvide: none required. Optional: active_only, min_similarity, sort_by, venue, limit.",
+          "documented_example_args": null
         },
         {
           "tool": "Polymarket Wallet Profile",
@@ -73,7 +75,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Return a complete Predexon smart-wallet profile for a Polymarket wallet, including performance metrics and trading style.\nProvide: 1. wallet (Polymarket wallet address)."
+          "description": "Return a complete Predexon smart-wallet profile for a Polymarket wallet, including performance metrics and trading style.\nProvide: 1. wallet (Polymarket wallet address).",
+          "documented_example_args": null
         },
         {
           "tool": "Polymarket Leaderboard",
@@ -90,7 +93,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Return ranked Polymarket smart wallets with style and performance filters for discovery and copy-trading agents.\nProvide: none required. Optional: window, sort_by, style, min_roi, min_win_rate, limit."
+          "description": "Return ranked Polymarket smart wallets with style and performance filters for discovery and copy-trading agents.\nProvide: none required. Optional: window, sort_by, style, min_roi, min_win_rate, limit.",
+          "documented_example_args": null
         },
         {
           "tool": "Polymarket Top Holders",
@@ -107,7 +111,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Return the largest holders for a Polymarket market by condition ID, with position size and side.\nProvide: 1. condition_id. Optional: side, min_shares, limit."
+          "description": "Return the largest holders for a Polymarket market by condition ID, with position size and side.\nProvide: 1. condition_id. Optional: side, min_shares, limit.",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -145,7 +150,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "AI-powered on-chain behavior profiling with X Layer mainnet data"
+          "description": "AI-powered on-chain behavior profiling with X Layer mainnet data",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -183,7 +189,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "token_launch",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Three independent AI agents analyze any EVM smart contract in parallel for contract-level security, tokenomics, and deterministic scam detection. 2/3 consensus returns SAFE, RISKY, or SCAM with per-agent reasoning.\nProvide: 1. contract address (0x...) 2. chain 3. optional threshold (default 2/3)"
+          "description": "Three independent AI agents analyze any EVM smart contract in parallel for contract-level security, tokenomics, and deterministic scam detection. 2/3 consensus returns SAFE, RISKY, or SCAM with per-agent reasoning.\nProvide: 1. contract address (0x...) 2. chain 3. optional threshold (default 2/3)",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -221,7 +228,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Returns a rule-based health check for any wallet: concentration risk, stale approvals, dead/illiquid tokens, and value-only dust, plus a plain-English summary and activity story across six chains.\nYou provide: 1. a wallet address 2. one or more chains to scan (optional)."
+          "description": "Returns a rule-based health check for any wallet: concentration risk, stale approvals, dead/illiquid tokens, and value-only dust, plus a plain-English summary and activity story across six chains.\nYou provide: 1. a wallet address 2. one or more chains to scan (optional).",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -259,7 +267,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Analyzes authorized OpenAPI bundles for agent-service readiness, operation safety, ambiguity blockers, and evidence digests.\nUser provides an OpenAPI 3.0/3.1 JSON bundle and confirms they are authorized to transform it."
+          "description": "Analyzes authorized OpenAPI bundles for agent-service readiness, operation safety, ambiguity blockers, and evidence digests.\nUser provides an OpenAPI 3.0/3.1 JSON bundle and confirms they are authorized to transform it.",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -297,7 +306,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Executes any of 35+ tools -- code hosting, email, chat, docs, web search, data -- through one gateway with routing, retries, and logging; for agents holding their own provider API keys.\n1. tool (qualified name) 2. params (per tool schema) 3. credentials with the tool's required fields (api_key for search; listed per tool in the free catalog); no key? use Managed Agent Task Execution"
+          "description": "Executes any of 35+ tools -- code hosting, email, chat, docs, web search, data -- through one gateway with routing, retries, and logging; for agents holding their own provider API keys.\n1. tool (qualified name) 2. params (per tool schema) 3. credentials with the tool's required fields (api_key for search; listed per tool in the free catalog); no key? use Managed Agent Task Execution",
+          "documented_example_args": null
         },
         {
           "tool": "API Monetization Router",
@@ -314,7 +324,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Hosted monetization for any HTTP API: register an upstream URL, price and payout wallet, and Pitchook serves it as a pay-per-call service agents buy with USDT on X Layer — settlement goes straight to the provider's wallet, and failed calls are never charged.\nProviders supply their API base URL, per-call USDT price and an X Layer payout wallet (optionally upstream auth headers and per-route prices); buyers just need a funded wallet."
+          "description": "Hosted monetization for any HTTP API: register an upstream URL, price and payout wallet, and Pitchook serves it as a pay-per-call service agents buy with USDT on X Layer — settlement goes straight to the provider's wallet, and failed calls are never charged.\nProviders supply their API base URL, per-call USDT price and an X Layer payout wallet (optionally upstream auth headers and per-route prices); buyers just need a funded wallet.",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 1,
@@ -352,7 +363,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "按关键词读取抖音 App 视频搜索 V2 结果，返回 business_data 列表、作者资料、播放源、标签、统计信息、cursor 和 has_more 等字段。\n用户需提供：1. keyword；2. 可选 cursor、sort_type、publish_time、filter_duration、content_type、search_id、backtrace。"
+          "description": "按关键词读取抖音 App 视频搜索 V2 结果，返回 business_data 列表、作者资料、播放源、标签、统计信息、cursor 和 has_more 等字段。\n用户需提供：1. keyword；2. 可选 cursor、sort_type、publish_time、filter_duration、content_type、search_id、backtrace。",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 61,
@@ -390,7 +402,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Returns the latest recent stored one-minute OHLCV bar for up to 100 U.S. equity symbols at no charge.\nProvide one symbol or a comma-separated symbol list and an optional adjustment mode."
+          "description": "Returns the latest recent stored one-minute OHLCV bar for up to 100 U.S. equity symbols at no charge.\nProvide one symbol or a comma-separated symbol list and an optional adjustment mode.",
+          "documented_example_args": null
         },
         {
           "tool": "US Stock Asset Discovery",
@@ -407,7 +420,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Returns the enabled U.S. equity symbols available from this data service for agents that need to discover supported market coverage.\nNo input is required."
+          "description": "Returns the enabled U.S. equity symbols available from this data service for agents that need to discover supported market coverage.\nNo input is required.",
+          "documented_example_args": null
         },
         {
           "tool": "US Stock Historical Bars",
@@ -424,7 +438,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Returns one bounded page of historical one-minute or daily U.S. equity OHLCV bars after final payment settlement.\nProvide symbol, interval, from, to, and optional adjustment and limit."
+          "description": "Returns one bounded page of historical one-minute or daily U.S. equity OHLCV bars after final payment settlement.\nProvide symbol, interval, from, to, and optional adjustment and limit.",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -462,7 +477,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: US BTC ETF data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get US BTC ETF data"
+          "description": "summary: US BTC ETF data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get US BTC ETF data",
+          "documented_example_args": null
         },
         {
           "tool": "US ETH ETF",
@@ -479,7 +495,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: US ETH ETF data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get US ETH ETF data"
+          "description": "summary: US ETH ETF data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get US ETH ETF data",
+          "documented_example_args": null
         },
         {
           "tool": "ETF Us BTC Inflow",
@@ -496,7 +513,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: ETF Us BTC Inflow data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get ETF Us BTC Inflow data"
+          "description": "summary: ETF Us BTC Inflow data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get ETF Us BTC Inflow data",
+          "documented_example_args": null
         },
         {
           "tool": "ETF Us ETH Inflow",
@@ -513,7 +531,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: ETF Us ETH Inflow data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get ETF Us ETH Inflow data"
+          "description": "summary: ETF Us ETH Inflow data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get ETF Us ETH Inflow data",
+          "documented_example_args": null
         },
         {
           "tool": "ETF Hk ETF Inflow",
@@ -530,7 +549,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: ETF Hk ETF Inflow data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get ETF Hk ETF Inflow data"
+          "description": "summary: ETF Hk ETF Inflow data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get ETF Hk ETF Inflow data",
+          "documented_example_args": null
         },
         {
           "tool": "Pair Last Price",
@@ -547,7 +567,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Pair Last Price data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Pair Last Price data"
+          "description": "summary: Pair Last Price data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Pair Last Price data",
+          "documented_example_args": null
         },
         {
           "tool": "Get Coin Market Cap",
@@ -564,7 +585,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Get Coin Market Cap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Get Coin Market Cap data"
+          "description": "summary: Get Coin Market Cap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Get Coin Market Cap data",
+          "documented_example_args": null
         },
         {
           "tool": "Base Coin",
@@ -581,7 +603,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Base Coin data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Base Coin data"
+          "description": "summary: Base Coin data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Base Coin data",
+          "documented_example_args": null
         },
         {
           "tool": "Base Coin Symbols",
@@ -598,7 +621,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Base Coin Symbols data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Base Coin Symbols data"
+          "description": "summary: Base Coin Symbols data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Base Coin Symbols data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Agg",
@@ -615,7 +639,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Agg data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Agg data"
+          "description": "summary: Instruments Agg data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Agg data",
+          "documented_example_args": null
         },
         {
           "tool": "Fund Fund Real",
@@ -632,7 +657,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Fund Fund Real data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Fund Fund Real data"
+          "description": "summary: Fund Fund Real data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Fund Fund Real data",
+          "documented_example_args": null
         },
         {
           "tool": "Fund Get Fund His",
@@ -649,7 +675,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Fund Get Fund His data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Fund Get Fund His data"
+          "description": "summary: Fund Get Fund His data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Fund Get Fund His data",
+          "documented_example_args": null
         },
         {
           "tool": "Funding Rate Hist",
@@ -666,7 +693,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Funding Rate Hist data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Hist data"
+          "description": "summary: Funding Rate Hist data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Hist data",
+          "documented_example_args": null
         },
         {
           "tool": "Funding Rate Current",
@@ -683,7 +711,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Funding Rate Current data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Current data"
+          "description": "summary: Funding Rate Current data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Current data",
+          "documented_example_args": null
         },
         {
           "tool": "Funding Rate Accumulated",
@@ -700,7 +729,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Funding Rate Accumulated data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Accumulated data"
+          "description": "summary: Funding Rate Accumulated data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Accumulated data",
+          "documented_example_args": null
         },
         {
           "tool": "Funding Rate Indicator",
@@ -717,7 +747,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Funding Rate Indicator data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Indicator data"
+          "description": "summary: Funding Rate Indicator data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Indicator data",
+          "documented_example_args": null
         },
         {
           "tool": "Funding Rate Kline",
@@ -734,7 +765,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Funding Rate Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Kline data"
+          "description": "summary: Funding Rate Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Kline data",
+          "documented_example_args": null
         },
         {
           "tool": "Funding Rate Wei Fr",
@@ -751,7 +783,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Funding Rate Wei Fr data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Wei Fr data"
+          "description": "summary: Funding Rate Wei Fr data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Wei Fr data",
+          "documented_example_args": null
         },
         {
           "tool": "Funding Rate Fr Heatmap",
@@ -768,7 +801,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Funding Rate Fr Heatmap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Fr Heatmap data"
+          "description": "summary: Funding Rate Fr Heatmap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Funding Rate Fr Heatmap data",
+          "documented_example_args": null
         },
         {
           "tool": "Whale Positions",
@@ -785,7 +819,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Whale Positions data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Whale Positions data"
+          "description": "summary: Whale Positions data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Whale Positions data",
+          "documented_example_args": null
         },
         {
           "tool": "Hyper Top Action",
@@ -802,7 +837,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Hyper Top Action data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Hyper Top Action data"
+          "description": "summary: Hyper Top Action data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Hyper Top Action data",
+          "documented_example_args": null
         },
         {
           "tool": "Indicator Get BTC Multiplier",
@@ -819,7 +855,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Indicator Get BTC Multiplier data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get BTC Multiplier data"
+          "description": "summary: Indicator Get BTC Multiplier data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get BTC Multiplier data",
+          "documented_example_args": null
         },
         {
           "tool": "Fear Greed Index",
@@ -836,7 +873,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Fear Greed Index data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Fear Greed Index data"
+          "description": "summary: Fear Greed Index data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Fear Greed Index data",
+          "documented_example_args": null
         },
         {
           "tool": "Indicator Get Ahr999",
@@ -853,7 +891,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Indicator Get Ahr999 data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Ahr999 data"
+          "description": "summary: Indicator Get Ahr999 data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Ahr999 data",
+          "documented_example_args": null
         },
         {
           "tool": "BTC Dominance",
@@ -870,7 +909,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: BTC Dominance data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get BTC Dominance data"
+          "description": "summary: BTC Dominance data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get BTC Dominance data",
+          "documented_example_args": null
         },
         {
           "tool": "Indicator Get Puell Multiple",
@@ -887,7 +927,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Indicator Get Puell Multiple data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Puell Multiple data"
+          "description": "summary: Indicator Get Puell Multiple data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Puell Multiple data",
+          "documented_example_args": null
         },
         {
           "tool": "Indicator Get BTC Pi",
@@ -904,7 +945,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Indicator Get BTC Pi data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get BTC Pi data"
+          "description": "summary: Indicator Get BTC Pi data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get BTC Pi data",
+          "documented_example_args": null
         },
         {
           "tool": "Get Moving Avg Heatmap",
@@ -921,7 +963,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Get Moving Avg Heatmap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Get Moving Avg Heatmap data"
+          "description": "summary: Get Moving Avg Heatmap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Get Moving Avg Heatmap data",
+          "documented_example_args": null
         },
         {
           "tool": "Indicator Get Grayscale OI",
@@ -938,7 +981,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Indicator Get Grayscale OI data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Grayscale OI data"
+          "description": "summary: Indicator Get Grayscale OI data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Grayscale OI data",
+          "documented_example_args": null
         },
         {
           "tool": "Indicator Get Altcoin Season",
@@ -955,7 +999,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Indicator Get Altcoin Season data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Altcoin Season data"
+          "description": "summary: Indicator Get Altcoin Season data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Get Altcoin Season data",
+          "documented_example_args": null
         },
         {
           "tool": "Indicator Index Charts",
@@ -972,7 +1017,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Indicator Index Charts data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Index Charts data"
+          "description": "summary: Indicator Index Charts data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Indicator Index Charts data",
+          "documented_example_args": null
         },
         {
           "tool": "SMC Indicator",
@@ -989,7 +1035,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: SMC Indicator data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get SMC Indicator data"
+          "description": "summary: SMC Indicator data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get SMC Indicator data",
+          "documented_example_args": null
         },
         {
           "tool": "Kline Lists",
@@ -1006,7 +1053,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Kline Lists data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Kline Lists data"
+          "description": "summary: Kline Lists data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Kline Lists data",
+          "documented_example_args": null
         },
         {
           "tool": "Trades Large Trades",
@@ -1023,7 +1071,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Trades Large Trades data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Trades Large Trades data"
+          "description": "summary: Trades Large Trades data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Trades Large Trades data",
+          "documented_example_args": null
         },
         {
           "tool": "Big Order Query Order",
@@ -1040,7 +1089,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Big Order Query Order data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Big Order Query Order data"
+          "description": "summary: Big Order Query Order data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Big Order Query Order data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq Realtime",
@@ -1057,7 +1107,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq Realtime data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Realtime data"
+          "description": "summary: Liq Realtime data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Realtime data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq History",
@@ -1074,7 +1125,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq History data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq History data"
+          "description": "summary: Liq History data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq History data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq History C08",
@@ -1091,7 +1143,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq History C08 data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq History C08 data"
+          "description": "summary: Liq History C08 data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq History C08 data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq Orders",
@@ -1108,7 +1161,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq Orders data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Orders data"
+          "description": "summary: Liq Orders data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Orders data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq Map Liq Map",
@@ -1125,7 +1179,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq Map Liq Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Liq Map data"
+          "description": "summary: Liq Map Liq Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Liq Map data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq Map Agg Liq Map",
@@ -1142,7 +1197,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq Map Agg Liq Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Agg Liq Map data"
+          "description": "summary: Liq Map Agg Liq Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Agg Liq Map data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq Map Liq Heat Map",
@@ -1159,7 +1215,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq Map Liq Heat Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Liq Heat Map data"
+          "description": "summary: Liq Map Liq Heat Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Liq Heat Map data",
+          "documented_example_args": null
         },
         {
           "tool": "Liq Map Symbols",
@@ -1176,7 +1233,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Liq Map Symbols data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Symbols data"
+          "description": "summary: Liq Map Symbols data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Liq Map Symbols data",
+          "documented_example_args": null
         },
         {
           "tool": "Net Positions Net Positions",
@@ -1193,7 +1251,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Net Positions Net Positions data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Net Positions Net Positions data"
+          "description": "summary: Net Positions Net Positions data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Net Positions Net Positions data",
+          "documented_example_args": null
         },
         {
           "tool": "Longshort Buy Sell",
@@ -1210,7 +1269,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Longshort Buy Sell data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Longshort Buy Sell data"
+          "description": "summary: Longshort Buy Sell data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Longshort Buy Sell data",
+          "documented_example_args": null
         },
         {
           "tool": "Exchange Long Short Ratio",
@@ -1227,7 +1287,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Exchange Long Short Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Exchange Long Short Ratio data"
+          "description": "summary: Exchange Long Short Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Exchange Long Short Ratio data",
+          "documented_example_args": null
         },
         {
           "tool": "Position Long Short Ratio",
@@ -1244,7 +1305,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Position Long Short Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Position Long Short Ratio data"
+          "description": "summary: Position Long Short Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Position Long Short Ratio data",
+          "documented_example_args": null
         },
         {
           "tool": "Whale Position Ratio",
@@ -1261,7 +1323,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Whale Position Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Whale Position Ratio data"
+          "description": "summary: Whale Position Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Whale Position Ratio data",
+          "documented_example_args": null
         },
         {
           "tool": "Whale Account Ratio",
@@ -1278,7 +1341,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Whale Account Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Whale Account Ratio data"
+          "description": "summary: Whale Account Ratio data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Whale Account Ratio data",
+          "documented_example_args": null
         },
         {
           "tool": "Long Short Ratio Kline",
@@ -1295,7 +1359,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Long Short Ratio Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Long Short Ratio Kline data"
+          "description": "summary: Long Short Ratio Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Long Short Ratio Kline data",
+          "documented_example_args": null
         },
         {
           "tool": "Market Order CVD",
@@ -1312,7 +1377,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Market Order CVD data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order CVD data"
+          "description": "summary: Market Order CVD data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order CVD data",
+          "documented_example_args": null
         },
         {
           "tool": "Market Order Buy Sell Count",
@@ -1329,7 +1395,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Market Order Buy Sell Count data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Buy Sell Count data"
+          "description": "summary: Market Order Buy Sell Count data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Buy Sell Count data",
+          "documented_example_args": null
         },
         {
           "tool": "Market Order Buy Sell Value",
@@ -1346,7 +1413,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Market Order Buy Sell Value data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Buy Sell Value data"
+          "description": "summary: Market Order Buy Sell Value data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Buy Sell Value data",
+          "documented_example_args": null
         },
         {
           "tool": "Market Order Buy Sell Volume",
@@ -1363,7 +1431,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Market Order Buy Sell Volume data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Buy Sell Volume data"
+          "description": "summary: Market Order Buy Sell Volume data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Buy Sell Volume data",
+          "documented_example_args": null
         },
         {
           "tool": "Market Order Agg CVD",
@@ -1380,7 +1449,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Market Order Agg CVD data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Agg CVD data"
+          "description": "summary: Market Order Agg CVD data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Market Order Agg CVD data",
+          "documented_example_args": null
         },
         {
           "tool": "Order Agg Buy Sell Count",
@@ -1397,7 +1467,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Order Agg Buy Sell Count data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Agg Buy Sell Count data"
+          "description": "summary: Order Agg Buy Sell Count data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Agg Buy Sell Count data",
+          "documented_example_args": null
         },
         {
           "tool": "Order Agg Buy Sell Value",
@@ -1414,7 +1485,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Order Agg Buy Sell Value data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Agg Buy Sell Value data"
+          "description": "summary: Order Agg Buy Sell Value data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Agg Buy Sell Value data",
+          "documented_example_args": null
         },
         {
           "tool": "Order Agg Buy Sell Volume",
@@ -1431,7 +1503,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Order Agg Buy Sell Volume data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Agg Buy Sell Volume data"
+          "description": "summary: Order Agg Buy Sell Volume data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Agg Buy Sell Volume data",
+          "documented_example_args": null
         },
         {
           "tool": "News List",
@@ -1448,7 +1521,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: News List data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get News List data"
+          "description": "summary: News List data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get News List data",
+          "documented_example_args": null
         },
         {
           "tool": "News Detail",
@@ -1465,7 +1539,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: News Detail data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get News Detail data"
+          "description": "summary: News Detail data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get News Detail data",
+          "documented_example_args": null
         },
         {
           "tool": "OI List",
@@ -1482,7 +1557,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: OI List data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI List data"
+          "description": "summary: OI List data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI List data",
+          "documented_example_args": null
         },
         {
           "tool": "OI History",
@@ -1499,7 +1575,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: OI History data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI History data"
+          "description": "summary: OI History data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI History data",
+          "documented_example_args": null
         },
         {
           "tool": "OI Symbol Chart",
@@ -1516,7 +1593,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: OI Symbol Chart data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI Symbol Chart data"
+          "description": "summary: OI Symbol Chart data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI Symbol Chart data",
+          "documented_example_args": null
         },
         {
           "tool": "OI Kline",
@@ -1533,7 +1611,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: OI Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI Kline data"
+          "description": "summary: OI Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI Kline data",
+          "documented_example_args": null
         },
         {
           "tool": "OI Agg Kline",
@@ -1550,7 +1629,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: OI Agg Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI Agg Kline data"
+          "description": "summary: OI Agg Kline data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get OI Agg Kline data",
+          "documented_example_args": null
         },
         {
           "tool": "Tickers Top Oiby Ex",
@@ -1567,7 +1647,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Tickers Top Oiby Ex data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Tickers Top Oiby Ex data"
+          "description": "summary: Tickers Top Oiby Ex data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Tickers Top Oiby Ex data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Oi Vs Mc",
@@ -1584,7 +1665,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Oi Vs Mc data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Oi Vs Mc data"
+          "description": "summary: Instruments Oi Vs Mc data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Oi Vs Mc data",
+          "documented_example_args": null
         },
         {
           "tool": "Order Flow List",
@@ -1601,7 +1683,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Order Flow List data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Flow List data"
+          "description": "summary: Order Flow List data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Flow List data",
+          "documented_example_args": null
         },
         {
           "tool": "Orderbook Spread",
@@ -1618,7 +1701,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Orderbook Spread data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Orderbook Spread data"
+          "description": "summary: Orderbook Spread data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Orderbook Spread data",
+          "documented_example_args": null
         },
         {
           "tool": "Order Book By Exchange",
@@ -1635,7 +1719,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Order Book By Exchange data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Book By Exchange data"
+          "description": "summary: Order Book By Exchange data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Book By Exchange data",
+          "documented_example_args": null
         },
         {
           "tool": "Order Book Heat Map",
@@ -1652,7 +1737,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Order Book Heat Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Book Heat Map data"
+          "description": "summary: Order Book Heat Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Order Book Heat Map data",
+          "documented_example_args": null
         },
         {
           "tool": "RSI Map",
@@ -1669,7 +1755,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: RSI Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get RSI Map data"
+          "description": "summary: RSI Map data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get RSI Map data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Oi Vs Market Cap",
@@ -1686,7 +1773,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Oi Vs Market Cap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Oi Vs Market Cap data"
+          "description": "summary: Instruments Oi Vs Market Cap data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Oi Vs Market Cap data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Visual Screener",
@@ -1703,7 +1791,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Visual Screener data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Visual Screener data"
+          "description": "summary: Instruments Visual Screener data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Visual Screener data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Long Short Rank",
@@ -1720,7 +1809,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Long Short Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Long Short Rank data"
+          "description": "summary: Instruments Long Short Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Long Short Rank data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Oi Rank",
@@ -1737,7 +1827,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Oi Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Oi Rank data"
+          "description": "summary: Instruments Oi Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Oi Rank data",
+          "documented_example_args": null
         },
         {
           "tool": "Trades Count",
@@ -1754,7 +1845,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Trades Count data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Trades Count data"
+          "description": "summary: Trades Count data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Trades Count data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Liq Rank",
@@ -1771,7 +1863,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Liq Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Liq Rank data"
+          "description": "summary: Instruments Liq Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Liq Rank data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Price Rank",
@@ -1788,7 +1881,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Price Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Price Rank data"
+          "description": "summary: Instruments Price Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Price Rank data",
+          "documented_example_args": null
         },
         {
           "tool": "Instruments Volume Rank",
@@ -1805,7 +1899,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "summary: Instruments Volume Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Volume Rank data"
+          "description": "summary: Instruments Volume Rank data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get Instruments Volume Rank data",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -1843,7 +1938,15 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Address balance at a block — POST.\nPOST only (GET=405). Requires chainIndex, address, height. Returns the balance at that block height.\ne.g. POST {\"chainIndex\":\"1\",\"address\":\"0x...\",\"height\":\"21000000\"}"
+          "description": "Address balance at a block — POST.\nPOST only (GET=405). Requires chainIndex, address, height. Returns the balance at that block height.\ne.g. POST {\"chainIndex\":\"1\",\"address\":\"0x...\",\"height\":\"21000000\"}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1",
+              "address": "0x...",
+              "height": "21000000"
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          }
         },
         {
           "tool": "Token Metadata",
@@ -1860,7 +1963,14 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Token metadata — POST.\nPOST only (GET=405). Requires chainIndex, tokenAddress. Returns name, symbol, decimals and total supply.\ne.g. POST {\"chainIndex\":\"1\",\"tokenAddress\":\"0x...\"}"
+          "description": "Token metadata — POST.\nPOST only (GET=405). Requires chainIndex, tokenAddress. Returns name, symbol, decimals and total supply.\ne.g. POST {\"chainIndex\":\"1\",\"tokenAddress\":\"0x...\"}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1",
+              "tokenAddress": "0x..."
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          }
         },
         {
           "tool": "Historical Token Price",
@@ -1877,7 +1987,15 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Historical token price — POST.\nPOST only (GET=405). Requires chainIndex, tokenAddress. Optional granularity=1m|5m|30m|1h|1D, limit.\ne.g. POST {\"chainIndex\":\"1\",\"tokenAddress\":\"0x...\",\"granularity\":\"1D\"}"
+          "description": "Historical token price — POST.\nPOST only (GET=405). Requires chainIndex, tokenAddress. Optional granularity=1m|5m|30m|1h|1D, limit.\ne.g. POST {\"chainIndex\":\"1\",\"tokenAddress\":\"0x...\",\"granularity\":\"1D\"}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1",
+              "tokenAddress": "0x...",
+              "granularity": "1D"
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          }
         },
         {
           "tool": "Realtime Token Price",
@@ -1894,7 +2012,16 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Realtime token price — POST.\nPOST only (GET=405). Requires chainIndex, tokenAddresses (array on that chain). Returns current prices.\ne.g. POST {\"chainIndex\":\"1\",\"tokenAddresses\":[\"0x...\"]}"
+          "description": "Realtime token price — POST.\nPOST only (GET=405). Requires chainIndex, tokenAddresses (array on that chain). Returns current prices.\ne.g. POST {\"chainIndex\":\"1\",\"tokenAddresses\":[\"0x...\"]}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1",
+              "tokenAddresses": [
+                "0x..."
+              ]
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          }
         },
         {
           "tool": "Gas Info",
@@ -1911,7 +2038,13 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Current gas / fee levels — POST.\nPOST only (GET=405). Requires chainIndex. Returns current gas prices (slow/standard/fast) and base fee.\ne.g. POST {\"chainIndex\":\"1\"}"
+          "description": "Current gas / fee levels — POST.\nPOST only (GET=405). Requires chainIndex. Returns current gas prices (slow/standard/fast) and base fee.\ne.g. POST {\"chainIndex\":\"1\"}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1"
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          }
         }
       ],
       "services_dropped": 30,
@@ -1949,7 +2082,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "一次支付获得 1000 次 Clawby 实时金融数据 API 调用额度:覆盖美股与期权、加密货币、衍生品、DEX 与 meme 币、预测市场、社交舆情、SEC 财报及 75+ 链 RPC 共 280+ 接口,适合需要实时行情与链上数据的 AI agent。\n需提供:1. 你的 Clawby API Key(置于请求头;未注册时按接入指引用钱包签名自动注册) 2. X Layer 网络的 USDT 支付(按报价完成) 3. 支付成功后获得完整 skill 安装方式,未安装过 Clawby skill 则自动化执行安装,api/mcp/onboard 接口也可查询到完整安装方式。"
+          "description": "一次支付获得 1000 次 Clawby 实时金融数据 API 调用额度:覆盖美股与期权、加密货币、衍生品、DEX 与 meme 币、预测市场、社交舆情、SEC 财报及 75+ 链 RPC 共 280+ 接口,适合需要实时行情与链上数据的 AI agent。\n需提供:1. 你的 Clawby API Key(置于请求头;未注册时按接入指引用钱包签名自动注册) 2. X Layer 网络的 USDT 支付(按报价完成) 3. 支付成功后获得完整 skill 安装方式,未安装过 Clawby skill 则自动化执行安装,api/mcp/onboard 接口也可查询到完整安装方式。",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -1987,7 +2121,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "A highly advanced, multi-modal crypto narrative intelligence engine. It pulls live market data and news to generate structured, actionable market intelligence, providing proprietary scores, market psychology analysis, and trading setups.\nInput required: target asset or query parameters."
+          "description": "A highly advanced, multi-modal crypto narrative intelligence engine. It pulls live market data and news to generate structured, actionable market intelligence, providing proprietary scores, market psychology analysis, and trading setups.\nInput required: target asset or query parameters.",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -2025,7 +2160,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Real-time on-chain prediction-market odds and probability data across crypto, sports, and event markets, returned as JSON for agents and apps that need live outcome probabilities.\nOptional query params: 1. marketId for one market 2. slug for one market by slug 3. category to filter the list 4. limit for list size. Send none for the full live market list."
+          "description": "Real-time on-chain prediction-market odds and probability data across crypto, sports, and event markets, returned as JSON for agents and apps that need live outcome probabilities.\nOptional query params: 1. marketId for one market 2. slug for one market by slug 3. category to filter the list 4. limit for list size. Send none for the full live market list.",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 0,
@@ -2067,7 +2203,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Returns the available OpenNews source and category tree for search filtering.\n2. User must provide POST/GET parameters: no required fields."
+          "description": "1. Returns the available OpenNews source and category tree for search filtering.\n2. User must provide POST/GET parameters: no required fields.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews News Search",
@@ -2084,7 +2221,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Searches market news with keyword, category, coin, score, and pagination filters.\n2. User must provide POST/GET parameters: no required fields; optional: q, engineTypes, coins, hasCoin, score, page, limit."
+          "description": "1. Searches market news with keyword, category, coin, score, and pagination filters.\n2. User must provide POST/GET parameters: no required fields; optional: q, engineTypes, coins, hasCoin, score, page, limit.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter User Info",
@@ -2101,7 +2239,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Fetches Twitter/X profile metadata, follower stats, verification status, and avatar data by username.\n2. User must provide POST/GET parameters: required: username."
+          "description": "1. Fetches Twitter/X profile metadata, follower stats, verification status, and avatar data by username.\n2. User must provide POST/GET parameters: required: username.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter User By ID",
@@ -2118,7 +2257,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Fetches Twitter/X profile metadata, follower stats, verification status, and avatar data by user ID.\n2. User must provide POST/GET parameters: required: userId."
+          "description": "1. Fetches Twitter/X profile metadata, follower stats, verification status, and avatar data by user ID.\n2. User must provide POST/GET parameters: required: userId.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter User Tweets",
@@ -2135,7 +2275,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Fetches account tweets with text, metrics, media, links, mentions, and conversation data.\n2. User must provide POST/GET parameters: required: username; optional: product, maxResults, includeReplies, includeRetweets."
+          "description": "1. Fetches account tweets with text, metrics, media, links, mentions, and conversation data.\n2. User must provide POST/GET parameters: required: username; optional: product, maxResults, includeReplies, includeRetweets.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter Search",
@@ -2152,7 +2293,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Searches Twitter/X content by keyword, topic, user filters, engagement metrics, dates, and language.\n2. User must provide POST/GET parameters: no required fields; optional: searchType, keywords, fromUser, toUser, mentionUser, hashtag, excludeReplies, excludeRetweets, minLikes, minRetweets, minReplies, sinceDate, untilDate, lang, product, maxResults, cursor."
+          "description": "1. Searches Twitter/X content by keyword, topic, user filters, engagement metrics, dates, and language.\n2. User must provide POST/GET parameters: no required fields; optional: searchType, keywords, fromUser, toUser, mentionUser, hashtag, excludeReplies, excludeRetweets, minLikes, minRetweets, minReplies, sinceDate, untilDate, lang, product, maxResults, cursor.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter KOL Followers",
@@ -2169,7 +2311,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Analyzes KOL follower data and social influence for a Twitter/X account.\n2. User must provide POST/GET parameters: required: username."
+          "description": "1. Analyzes KOL follower data and social influence for a Twitter/X account.\n2. User must provide POST/GET parameters: required: username.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter Article By ID",
@@ -2186,7 +2329,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Fetches Twitter/X article metadata and content by article ID.\n2. User must provide POST/GET parameters: required: id."
+          "description": "1. Fetches Twitter/X article metadata and content by article ID.\n2. User must provide POST/GET parameters: required: id.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Tweet By ID",
@@ -2203,7 +2347,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Fetches tweet text, author data, engagement metrics, media, and context by tweet ID.\n2. User must provide POST/GET parameters: required: id."
+          "description": "1. Fetches tweet text, author data, engagement metrics, media, and context by tweet ID.\n2. User must provide POST/GET parameters: required: id.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter Quote Tweets",
@@ -2220,7 +2365,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Fetches quote tweets with author data, engagement metrics, and result count controls.\n2. User must provide POST/GET parameters: required: id; optional: maxResults."
+          "description": "1. Fetches quote tweets with author data, engagement metrics, and result count controls.\n2. User must provide POST/GET parameters: required: id; optional: maxResults.",
+          "documented_example_args": null
         },
         {
           "tool": "OpenNews Twitter Retweet Users",
@@ -2237,7 +2383,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "1. Fetches users who retweeted a tweet and returns pagination cursor data.\n2. User must provide POST/GET parameters: required: id; optional: cursor."
+          "description": "1. Fetches users who retweeted a tweet and returns pagination cursor data.\n2. User must provide POST/GET parameters: required: id; optional: cursor.",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 2,
@@ -2275,7 +2422,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Real-time stablecoin market snapshot.\nTotal market cap, yield-bearing share, asset mix, chain distribution and market-wide APY stats for a quick market pulse.\nGive me a stablecoin market overview"
+          "description": "Real-time stablecoin market snapshot.\nTotal market cap, yield-bearing share, asset mix, chain distribution and market-wide APY stats for a quick market pulse.\nGive me a stablecoin market overview",
+          "documented_example_args": null
         },
         {
           "tool": "Stablecoin Market Trend",
@@ -2292,7 +2440,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Stablecoin market trends over time.\nTime-series of stablecoin market cap, APY and distribution, with an optional time range, for trend and time-series analysis.\nShow stablecoin market cap trend over 90 days"
+          "description": "Stablecoin market trends over time.\nTime-series of stablecoin market cap, APY and distribution, with an optional time range, for trend and time-series analysis.\nShow stablecoin market cap trend over 90 days",
+          "documented_example_args": null
         },
         {
           "tool": "Barker Yield Advisor",
@@ -2309,7 +2458,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Ranked yield picks with reasons and risk flags.\nTop-N stablecoin picks over Barker's DeFi yield index (500+ protocols): risk-band TVL floor, APY sanity cap, data-derived reasons + risk flags per pick.\nWhere should I park 10k USDC right now, low risk?"
+          "description": "Ranked yield picks with reasons and risk flags.\nTop-N stablecoin picks over Barker's DeFi yield index (500+ protocols): risk-band TVL floor, APY sanity cap, data-derived reasons + risk flags per pick.\nWhere should I park 10k USDC right now, low risk?",
+          "documented_example_args": null
         },
         {
           "tool": "Barker Pool History",
@@ -2326,7 +2476,8 @@
           "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
           "capability": "market_snapshot",
           "capability_source": "inferred_from_service_name_and_description",
-          "description": "Per-pool APY/TVL time series.\n7-180 day series for trend and volatility analysis of one pool_uid.\nIs this pool's APY stable over 30 days?"
+          "description": "Per-pool APY/TVL time series.\n7-180 day series for trend and volatility analysis of one pool_uid.\nIs this pool's APY stable over 30 days?",
+          "documented_example_args": null
         }
       ],
       "services_dropped": 6,

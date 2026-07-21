@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toBaseUnits } from "./generate.js";
+import { toBaseUnits , documentedExampleArgs} from "./generate.js";
 
 // The marketplace reports fees as decimals ("0.000015"), but every amount that
 // reaches a cap check or a payment has to be an exact base-unit integer. A
@@ -40,4 +40,45 @@ test("refuses anything that is not a plain decimal number", () => {
 test("handles a zero-decimal token", () => {
   assert.equal(toBaseUnits(5, 0), "5");
   assert.equal(toBaseUnits(0.5, 0), null);
+});
+
+test("documentedExampleArgs copies a published literal and refuses to guess", () => {
+  // The real OKLink description, verbatim from the 2026-07-21 scan.
+  const oklink = {
+    serviceDescription:
+      'Address balance at a block — POST.\nPOST only (GET=405). Requires chainIndex, address, height. ' +
+      'Returns the balance at that block height.\ne.g. POST {"chainIndex":"1","address":"0x...","height":"21000000"}'
+  };
+  const found = documentedExampleArgs(oklink);
+  assert.deepEqual(found.args, { chainIndex: "1", address: "0x...", height: "21000000" });
+  assert.equal(found.source, "verbatim_json_literal_in_vendor_service_description");
+
+  // Prose that describes parameters but publishes no literal: unknown, not empty.
+  assert.equal(
+    documentedExampleArgs({ serviceDescription: "Send a chainIndex and an address to get a balance." }),
+    null
+  );
+  // Looks like JSON, is not.
+  assert.equal(documentedExampleArgs({ serviceDescription: 'e.g. {"chainIndex": }' }), null);
+  // A nested body is recorded faithfully. The hazard was never nesting itself,
+  // it was a brace-excluding regex silently returning the INNER object — a
+  // plausible-looking wrong answer. Depth counting makes that impossible.
+  assert.deepEqual(
+    documentedExampleArgs({ serviceDescription: 'e.g. {"filter":{"a":1},"b":2}' }).args,
+    { filter: { a: 1 }, b: 2 }
+  );
+  // Braces inside a string value must not end the span early.
+  assert.deepEqual(
+    documentedExampleArgs({ serviceDescription: 'e.g. {"note":"use {curly}","b":2}' }).args,
+    { note: "use {curly}", b: 2 }
+  );
+  // A truncated example is refused rather than repaired.
+  assert.equal(documentedExampleArgs({ serviceDescription: 'e.g. {"a":1' }), null);
+  // An array value is legitimate and sendable.
+  assert.deepEqual(
+    documentedExampleArgs({ serviceDescription: 'e.g. {"chainIndex":"1","tokenAddresses":["0x..."]}' }).args,
+    { chainIndex: "1", tokenAddresses: ["0x..."] }
+  );
+  // No description at all.
+  assert.equal(documentedExampleArgs({}), null);
 });

@@ -117,6 +117,77 @@ export function toBaseUnits(feeAmount, decimals) {
   return combined;
 }
 
+/**
+ * The request body a vendor documents for itself, when it documents one.
+ *
+ * Copied verbatim from a JSON literal the vendor published in its own service
+ * description — never inferred from prose, because guessing a request schema
+ * with real money behind it is how you pay for a 400.
+ *
+ * Two things a caller MUST respect:
+ *   - Values are often placeholders (`"address": "0x..."`). This is a shape
+ *     hint, not a sendable body. Substitute real values before calling.
+ *   - Most vendors document nothing. As of the 2026-07-21 scan only 5 of 118
+ *     services carry a literal example, and all 5 belong to OKLink #2023. A
+ *     null here means "unknown", never "no arguments required".
+ */
+export function documentedExampleArgs(service) {
+  const text = service.serviceDescription;
+  if (typeof text !== "string") return null;
+  const literal = firstBalancedObject(text);
+  if (literal === null) return null;
+  try {
+    const parsed = JSON.parse(literal);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    return { args: parsed, source: "verbatim_json_literal_in_vendor_service_description" };
+  } catch {
+    // Looked like JSON and was not. Say nothing rather than half-parse it.
+    return null;
+  }
+}
+
+/**
+ * The first brace-balanced `{...}` span in `text`, or null.
+ *
+ * Depth-counting rather than a regex, because a regex that excludes braces
+ * silently matches the INNER object of a nested body — returning `{"a":1}` out
+ * of `{"filter":{"a":1},"b":2}`. That is a plausible-looking wrong answer,
+ * which is the worst kind. Braces inside string values are ignored so a
+ * description containing `"note":"use {curly}"` cannot end the span early.
+ */
+function firstBalancedObject(text) {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  // Unbalanced: a truncated example. Refuse rather than repair it.
+  return null;
+}
+
 /** Derived, labelled risk flags. These are ours, not the marketplace's. */
 function deriveFlags(agent) {
   const flags = [];
@@ -207,7 +278,8 @@ async function main() {
         fee_token: contract ?? null,
         capability: inferCapability(service),
         capability_source: "inferred_from_service_name_and_description",
-        description: service.serviceDescription ?? null
+        description: service.serviceDescription ?? null,
+        documented_example_args: documentedExampleArgs(service)
       });
     }
 
