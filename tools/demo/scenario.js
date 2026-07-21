@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   buildDeliverable,
   usdt,
   validateDeliverable,
   vendors
 } from "../../packages/mocks/src/fixtures.js";
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const liveMode = process.argv.includes("--live");
 const gatewayArg = process.argv.find((arg) => arg.startsWith("--gateway-url="));
@@ -96,25 +98,6 @@ async function postGateway(tool, args) {
   return response.json();
 }
 
-function runWorker(taskId) {
-  const result = spawnSync("uv", ["run", "firm-worker", "work-task-demo", taskId], {
-    cwd: new URL("../../apps/firm", import.meta.url),
-    env: {
-      ...process.env,
-      UV_CACHE_DIR: "/tmp/firm-uv-cache"
-    },
-    encoding: "utf8"
-  });
-  if (result.status !== 0) {
-    throw new Error(result.stderr);
-  }
-  const parsed = JSON.parse(result.stdout);
-  if (parsed.task_id !== taskId) {
-    throw new Error(`worker claimed ${parsed.task_id}, expected ${taskId}`);
-  }
-  return parsed;
-}
-
 if (gatewayUrl) {
   const goal = "Prepare a launch briefing";
   line("Firm Projects demo spine");
@@ -131,16 +114,50 @@ if (gatewayUrl) {
   line(`Goal: ${goal}`);
   line(`Fixed price: ${money(quote.price)}`);
   line(`Quote id: ${quote.quote_id}`);
-  section("Execution");
+  section("Execution (live)");
   const execution = await postGateway("execute", { quote_id: quote.quote_id });
   line(`Task id: ${execution.task_id}`);
-  const worked = runWorker(execution.task_id);
-  line(`Worker state: ${worked.state}`);
-  const status = await postGateway("get_status", { task_id: execution.task_id });
-  line(`Checkpoints: ${status.progress.length}`);
-  for (const checkpoint of status.progress) {
-    line(`- ${checkpoint.state}: ${checkpoint.note}`);
+
+  // Run the worker in the background and stream its checkpoints as the Firm
+  // sources, hires, validates, fires, and re-hires — so the fallback is watched
+  // live rather than summarised after the fact.
+  const worker = spawn("uv", ["run", "firm-worker", "work-task-demo", execution.task_id], {
+    cwd: new URL("../../apps/firm", import.meta.url),
+    env: { ...process.env, UV_CACHE_DIR: "/tmp/firm-uv-cache" },
+    encoding: "utf8"
+  });
+  let workerStderr = "";
+  let workerExited = false;
+  worker.stderr.on("data", (chunk) => (workerStderr += chunk));
+  worker.on("exit", () => (workerExited = true));
+
+  const terminal = new Set(["complete", "failed_refunded", "refunded"]);
+  let printed = 0;
+  let finalState = execution.state;
+  for (let poll = 0; poll < 600; poll += 1) {
+    const status = await postGateway("get_status", { task_id: execution.task_id });
+    const progress = status.progress ?? [];
+    for (; printed < progress.length; printed += 1) {
+      line(`- ${progress[printed].state}: ${progress[printed].note}`);
+    }
+    finalState = status.state ?? finalState;
+    if (terminal.has(finalState)) break;
+    if (workerExited) {
+      // One last read to flush any checkpoint written just before exit.
+      const flush = await postGateway("get_status", { task_id: execution.task_id });
+      for (const checkpoint of (flush.progress ?? []).slice(printed)) {
+        line(`- ${checkpoint.state}: ${checkpoint.note}`);
+      }
+      finalState = flush.state ?? finalState;
+      break;
+    }
+    await sleep(250);
   }
+  if (!terminal.has(finalState) && workerStderr) {
+    throw new Error(workerStderr);
+  }
+  line(`Final state: ${finalState}`);
+
   section("Result");
   const result = await postGateway("get_result", { task_id: execution.task_id });
   line(`Guarantee: ${result.provenance.guarantee_status}`);

@@ -2,8 +2,23 @@ import http from "node:http";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-import { assertAggregateCaps, assertPerCall, assertRefundCap, capsFromEnv } from "./caps.js";
-import { ensureTables, pool } from "./db.js";
+import { capsFromEnv } from "./caps.js";
+import {
+  ensureTables,
+  markSigned,
+  recordSignedFailure,
+  releaseCall,
+  releaseRefund,
+  reserveCall,
+  reserveRefund,
+  settleCall,
+  settleRefund,
+  spendSnapshot
+} from "./db.js";
+import { units } from "./money.js";
+import { executeRefund, realRefundsEnabled } from "./refund.js";
+import { realSigner } from "./signer.js";
+import { payAndCallVendor } from "./vendor.js";
 
 const money = z.object({ amount: z.string(), decimals: z.number(), token: z.string() });
 const payAndCallSchema = z.object({
@@ -20,6 +35,17 @@ const refundSchema = z.object({
   amount: money
 });
 
+function realPaymentsEnabled(): boolean {
+  return process.env.REAL_PAYMENTS_ENABLED === "true";
+}
+
+function allowedAssets(): string[] | undefined {
+  const raw = process.env.X402_ALLOWED_ASSETS;
+  if (!raw) return undefined;
+  const list = raw.split(",").map((entry) => entry.trim()).filter(Boolean);
+  return list.length > 0 ? list : undefined;
+}
+
 async function readJson(req: http.IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.from(chunk));
@@ -35,92 +61,16 @@ function simulatedTx(prefix: string, key: string) {
   return `SIMULATED:${prefix}:${createHash("sha256").update(key).digest("hex").slice(0, 24)}`;
 }
 
-async function existingCall(idempotencyKey: string) {
-  const client = pool();
-  try {
-    const result = await client.query("SELECT response FROM procurer_calls WHERE idempotency_key = $1", [idempotencyKey]);
-    return result.rows[0]?.response ?? null;
-  } finally {
-    await client.end();
-  }
-}
+type PayRequest = z.infer<typeof payAndCallSchema>;
 
-async function saveCall(idempotencyKey: string, request: z.infer<typeof payAndCallSchema>, response: unknown) {
-  const client = pool();
-  try {
-    await client.query(
-      `INSERT INTO procurer_calls
-       (idempotency_key, task_id, subtask_id, vendor_endpoint, amount, response)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
-       ON CONFLICT (idempotency_key) DO NOTHING`,
-      [
-        idempotencyKey,
-        request.task_id,
-        request.subtask_id,
-        request.vendor_endpoint,
-        JSON.stringify(request.max_amount),
-        JSON.stringify(response)
-      ]
-    );
-  } finally {
-    await client.end();
-  }
-}
-
-async function spendTotals(taskId: string) {
-  const client = pool();
-  try {
-    const result = await client.query(
-      `SELECT
-         COALESCE(SUM(((amount->>'amount')::bigint)) FILTER (WHERE task_id = $1), 0)::bigint AS task_spend,
-         COALESCE(SUM(((amount->>'amount')::bigint)) FILTER (WHERE created_at >= date_trunc('day', now())), 0)::bigint AS daily_spend
-       FROM procurer_calls`,
-      [taskId]
-    );
-    return {
-      taskSpend: Number(result.rows[0]?.task_spend ?? 0),
-      dailySpend: Number(result.rows[0]?.daily_spend ?? 0)
-    };
-  } finally {
-    await client.end();
-  }
-}
-
-async function refundTotalToday() {
-  const client = pool();
-  try {
-    const result = await client.query(
-      `SELECT COALESCE(SUM(((amount->>'amount')::bigint)), 0)::bigint AS refunded
-       FROM procurer_refunds
-       WHERE created_at >= date_trunc('day', now())`
-    );
-    return Number(result.rows[0]?.refunded ?? 0);
-  } finally {
-    await client.end();
-  }
-}
-
-async function handlePayAndCall(body: unknown) {
-  const request = payAndCallSchema.parse(body);
-  const idempotencyKey = `${request.task_id}:${request.subtask_id}:${request.vendor_endpoint}`;
-  const existing = await existingCall(idempotencyKey);
-  if (existing) return existing;
-
-  const caps = capsFromEnv();
-  const capCheck = assertPerCall(request.max_amount, caps);
-  if (!capCheck.ok) return capCheck;
-  const totals = await spendTotals(request.task_id);
-  const aggregateCheck = assertAggregateCaps(
-    request.max_amount,
-    caps,
-    totals.taskSpend,
-    totals.dailySpend
-  );
-  if (!aggregateCheck.ok) return aggregateCheck;
-
-  // TODO(unverified): replace with real OKX x402 buyer flow after human-triggered payment spike.
-  const response = {
-    ok: true,
+/**
+ * Simulation stands in for the vendor round trip when real payments are off.
+ * It still runs behind the same reservation and cap machinery, so the money
+ * bookkeeping under test is the same code that runs live.
+ */
+function simulatedOutcome(request: PayRequest, idempotencyKey: string) {
+  return {
+    ok: true as const,
     result: {
       kind: request.tool,
       checklist: ["SIMULATED procurer vendor result"],
@@ -133,28 +83,147 @@ async function handlePayAndCall(body: unknown) {
     },
     latency_ms: 50
   };
-  await saveCall(idempotencyKey, request, response);
-  return response;
+}
+
+async function handlePayAndCall(body: unknown) {
+  const request = payAndCallSchema.parse(body);
+  const idempotencyKey = `${request.task_id}:${request.subtask_id}:${request.vendor_endpoint}`;
+  const caps = capsFromEnv();
+
+  let ceilingUnits: number;
+  try {
+    ceilingUnits = units(request.max_amount);
+  } catch (error) {
+    return { ok: false, error_code: "VENDOR_ERROR", detail: String(error) };
+  }
+
+  // Claim the ceiling against every cap before a single byte goes to the vendor.
+  const reservation = await reserveCall(
+    {
+      idempotencyKey,
+      taskId: request.task_id,
+      subtaskId: request.subtask_id,
+      vendorEndpoint: request.vendor_endpoint,
+      ceiling: request.max_amount
+    },
+    caps,
+    realPaymentsEnabled() ? "real" : "simulated"
+  );
+
+  if (reservation.kind === "replay") return reservation.response;
+  if (reservation.kind === "cap_exceeded") {
+    return { ok: false, error_code: "CAP_EXCEEDED", detail: reservation.detail };
+  }
+  if (reservation.kind === "in_flight") {
+    return {
+      ok: false,
+      error_code: "PAYMENT_FAILED",
+      detail: "another call for this (task_id, subtask_id, vendor_endpoint) is already in flight"
+    };
+  }
+  if (reservation.kind === "needs_human") {
+    return { ok: false, error_code: "REQUIRES_HUMAN", detail: reservation.detail };
+  }
+
+  if (!realPaymentsEnabled()) {
+    const response = simulatedOutcome(request, idempotencyKey);
+    await settleCall(idempotencyKey, request.max_amount, response);
+    return response;
+  }
+
+  let outcome;
+  try {
+    outcome = await payAndCallVendor(
+      { vendorEndpoint: request.vendor_endpoint, tool: request.tool, args: request.args },
+      {
+        signer: realSigner(),
+        allowedAssets: allowedAssets(),
+        decimals: request.max_amount.decimals,
+        token: request.max_amount.token,
+        timeoutMs: Number(process.env.VENDOR_TIMEOUT_MS ?? 60_000),
+        onSigned: () => markSigned(idempotencyKey),
+        // The reservation already cleared the ceiling against the aggregate caps.
+        // The only thing left to prove is that what the vendor actually asked for
+        // is not more than what the caller authorised.
+        verifyCaps: async (offer) => {
+          if (offer.amountUnits > ceilingUnits) {
+            return {
+              detail: `vendor asked for ${offer.amountUnits} base units, above the caller's max_amount of ${ceilingUnits}`
+            };
+          }
+          if (offer.amountUnits > caps.perCallMax) {
+            return { detail: "per-call cap would be exceeded before payment" };
+          }
+          return null;
+        }
+      }
+    );
+  } catch (error) {
+    // An unexpected throw would otherwise strand the row in `reserved`, where
+    // it blocks every retry of this subtask with IN_FLIGHT and permanently
+    // consumes cap budget. Release it — releaseCall only touches `reserved`
+    // rows, so a throw that happened after signing is still left alone.
+    const failure = { ok: false as const, error_code: "PROCURER_ERROR", detail: String(error) };
+    await releaseCall(idempotencyKey, failure);
+    await recordSignedFailure(idempotencyKey, failure);
+    return failure;
+  }
+
+  if (outcome.ok) {
+    await settleCall(idempotencyKey, outcome.receipt.amount, outcome);
+    return outcome;
+  }
+
+  // A failure before signing releases the claim so the worker can retry.
+  // A failure after signing does not: markSigned already moved the row out of
+  // `reserved`, and releaseCall deliberately only touches `reserved` rows.
+  await releaseCall(idempotencyKey, outcome);
+  await recordSignedFailure(idempotencyKey, outcome);
+  return outcome;
 }
 
 async function handleRefund(body: unknown) {
   const request = refundSchema.parse(body);
-  const refundCheck = assertRefundCap(request.amount, capsFromEnv(), await refundTotalToday());
-  if (!refundCheck.ok) return refundCheck;
-  const client = pool();
+  const caps = capsFromEnv();
+
+  let amountUnits: number;
   try {
-    const existing = await client.query("SELECT response FROM procurer_refunds WHERE task_id = $1", [request.task_id]);
-    if (existing.rows[0]) return existing.rows[0].response;
-    const response = { tx: simulatedTx("refund", request.task_id) };
-    await client.query(
-      `INSERT INTO procurer_refunds (task_id, amount, to_address, response)
-       VALUES ($1, $2::jsonb, $3, $4::jsonb)`,
-      [request.task_id, JSON.stringify(request.amount), request.to_address, JSON.stringify(response)]
-    );
-    return response;
-  } finally {
-    await client.end();
+    amountUnits = units(request.amount);
+  } catch (error) {
+    return { error_code: "VENDOR_ERROR", detail: String(error) };
   }
+
+  const reservation = await reserveRefund(
+    { taskId: request.task_id, toAddress: request.to_address, amount: request.amount },
+    caps
+  );
+
+  if (reservation.kind === "replay") return reservation.response;
+  if (reservation.kind === "requires_human") {
+    return { error_code: "REQUIRES_HUMAN", detail: reservation.detail };
+  }
+  if (reservation.kind === "cap_exceeded") {
+    return { error_code: "CAP_EXCEEDED", detail: reservation.detail };
+  }
+  if (reservation.kind === "in_flight") {
+    return { error_code: "REFUND_IN_FLIGHT", detail: "a refund for this task is already in flight" };
+  }
+
+  if (!realRefundsEnabled()) {
+    const response = { tx: simulatedTx("refund", request.task_id) };
+    await settleRefund(request.task_id, response);
+    return response;
+  }
+
+  const result = await executeRefund({ toAddress: request.to_address, amountUnits });
+  if (!result.ok) {
+    const response = { error_code: "REFUND_FAILED", detail: result.detail };
+    await releaseRefund(request.task_id, response);
+    return response;
+  }
+  const response = { tx: result.tx, detail: result.detail };
+  await settleRefund(request.task_id, response);
+  return response;
 }
 
 await ensureTables();
@@ -162,11 +231,17 @@ await ensureTables();
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
-      send(res, 200, { ok: true, service: "firm-procurer", real_payments_enabled: false });
+      send(res, 200, {
+        ok: true,
+        service: "firm-procurer",
+        real_payments_enabled: realPaymentsEnabled(),
+        real_refunds_enabled: realRefundsEnabled(),
+        wallet_key_present: Boolean(process.env.FIRM_WALLET_KEY)
+      });
       return;
     }
     if (req.method === "GET" && req.url === "/caps") {
-      send(res, 200, capsFromEnv());
+      send(res, 200, { ...capsFromEnv(), ...(await spendSnapshot()) });
       return;
     }
     if (req.method !== "POST") {
@@ -189,5 +264,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(Number(process.env.PORT ?? 8787), "127.0.0.1", () => {
-  console.log(`firm-procurer listening on http://127.0.0.1:${process.env.PORT ?? 8787}`);
+  const mode = realPaymentsEnabled() ? "REAL PAYMENTS ENABLED" : "simulation only";
+  console.log(`firm-procurer listening on http://127.0.0.1:${process.env.PORT ?? 8787} (${mode})`);
 });

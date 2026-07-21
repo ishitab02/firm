@@ -100,7 +100,8 @@ class PostgresCheckpointStore:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT task_id, goal, quote, state, progress, deliverable, provenance, refund
+                    SELECT task_id, goal, quote, params, state, progress,
+                           deliverable, provenance, refund
                     FROM firm_jobs
                     WHERE task_id = %s
                     """,
@@ -199,6 +200,7 @@ class PostgresCheckpointStore:
                     FROM next_job
                     WHERE firm_jobs.task_id = next_job.task_id
                     RETURNING firm_jobs.task_id, firm_jobs.goal, firm_jobs.quote,
+                              firm_jobs.params,
                               firm_jobs.state, firm_jobs.progress,
                               firm_jobs.deliverable, firm_jobs.provenance, firm_jobs.refund
                     """,
@@ -223,7 +225,7 @@ class PostgresCheckpointStore:
                     SET state = %s, updated_at = now()
                     WHERE task_id = %s
                       AND state IN (%s, %s)
-                    RETURNING task_id, goal, quote, state, progress,
+                    RETURNING task_id, goal, quote, params, state, progress,
                               deliverable, provenance, refund
                     """,
                     (JobState.PLANNING.value, task_id, JobState.PAID.value, JobState.PLANNING.value),
@@ -258,13 +260,15 @@ class PostgresCheckpointStore:
         cursor.execute(
             """
             INSERT INTO firm_jobs (
-              task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund, updated_at
+              task_id, quote_id, state, goal, quote, params,
+              progress, deliverable, provenance, refund, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
             ON CONFLICT (task_id) DO UPDATE SET
               state = EXCLUDED.state,
               goal = EXCLUDED.goal,
               quote = EXCLUDED.quote,
+              params = EXCLUDED.params,
               progress = EXCLUDED.progress,
               deliverable = EXCLUDED.deliverable,
               provenance = EXCLUDED.provenance,
@@ -277,6 +281,7 @@ class PostgresCheckpointStore:
                 task.state.value,
                 task.goal,
                 Jsonb(task.quote.model_dump(mode="json")),
+                Jsonb(task.params),
                 Jsonb([item.model_dump(mode="json") for item in task.progress]),
                 Jsonb(task.deliverable),
                 Jsonb(task.provenance.model_dump(mode="json") if task.provenance else None),

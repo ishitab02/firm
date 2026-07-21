@@ -2,10 +2,55 @@ import asyncio
 from datetime import datetime, timezone
 
 from firm.cli import DemoProcurer, demo_vendors
-from firm.models import FirmTask, JobState, Money, Quote
+from firm.models import (
+    Constraints,
+    FirmTask,
+    JobState,
+    Money,
+    PayAndCallRequest,
+    PayAndCallResponse,
+    Quote,
+    VendorIndexEntry,
+    VendorService,
+)
 from firm.sourcing import PerformanceStore
 from firm.storage import InMemoryCheckpointStore
 from firm.worker import run_task
+
+
+class AlwaysGoodProcurer:
+    """Delivers a fresh, valid result for whatever subtask is requested."""
+
+    async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
+        return PayAndCallResponse(
+            ok=True,
+            result={
+                "kind": request.tool,
+                "checklist": ["delivered item"],
+                "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            },
+            receipt={
+                "amount": request.max_amount.model_dump(),
+                "tx": f"SIMULATED:{request.subtask_id}",
+                "payment_response": "SIMULATED",
+            },
+            latency_ms=10,
+        )
+
+    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, str]:
+        return {"tx": f"SIMULATED:refund:{task_id}"}
+
+
+def _specialist(agent_id: str, capability: str, tool: str) -> VendorIndexEntry:
+    return VendorIndexEntry(
+        agent_id=agent_id,
+        name=agent_id,
+        endpoint=f"http://mock.local/{agent_id}",
+        services=[VendorService(tool=tool, capability=capability, price=Money.usdt(100_000))],
+        kya_base_score=90,
+        flags=[],
+        last_verified_at="2026-07-18T00:00:00Z",
+    )
 
 
 def quote() -> Quote:
@@ -39,3 +84,246 @@ async def run_refund_task() -> FirmTask:
         performance=PerformanceStore({}),
         procurer=DemoProcurer(),
     )
+
+
+def test_multi_subtask_job_hires_a_specialist_per_subtask() -> None:
+    two_subtasks = Quote(
+        quote_id="q_multi",
+        price=Money.usdt(1_000_000),
+        plan_summary=[
+            {"subtask": "market snapshot", "capability": "market_snapshot"},
+            {"subtask": "launch brief", "capability": "token_launch"},
+        ],
+        valid_until=datetime.now(timezone.utc),
+    )
+    task = FirmTask(task_id="t_multi", goal="market + launch", quote=two_subtasks, state=JobState.PAID)
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            vendors=[
+                _specialist("market-vendor", "market_snapshot", "market_snapshot"),
+                _specialist("launch-vendor", "token_launch", "launch_brief"),
+            ],
+            store=InMemoryCheckpointStore(),
+            performance=PerformanceStore({}),
+            procurer=AlwaysGoodProcurer(),
+        )
+    )
+
+    assert completed.state == JobState.COMPLETE
+    assert completed.deliverable is not None
+    subtasks = completed.deliverable["result"]["subtasks"]
+    assert [s["capability"] for s in subtasks] == ["market_snapshot", "token_launch"]
+    assert [s["agent_id"] for s in subtasks] == ["market-vendor", "launch-vendor"]
+    # One hire per subtask, and provenance economics summed both vendor costs.
+    assert completed.provenance is not None
+    assert len(completed.provenance.hires) == 2
+
+
+def test_multi_subtask_job_refunds_if_any_subtask_cannot_be_filled() -> None:
+    # Only a market vendor exists; the launch subtask has no candidate, so the
+    # whole job must refund rather than deliver a partial result.
+    two_subtasks = Quote(
+        quote_id="q_partial",
+        price=Money.usdt(1_000_000),
+        plan_summary=[
+            {"subtask": "market snapshot", "capability": "market_snapshot"},
+            {"subtask": "launch brief", "capability": "token_launch"},
+        ],
+        valid_until=datetime.now(timezone.utc),
+    )
+    task = FirmTask(task_id="t_partial", goal="market + launch", quote=two_subtasks, state=JobState.PAID)
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            vendors=[_specialist("market-vendor", "market_snapshot", "market_snapshot")],
+            store=InMemoryCheckpointStore(),
+            performance=PerformanceStore({}),
+            procurer=AlwaysGoodProcurer(),
+        )
+    )
+
+    assert completed.state == JobState.FAILED_REFUNDED
+    assert completed.deliverable is None
+
+
+def test_refund_targets_the_captured_buyer_address() -> None:
+    # A job that captured a real payer must refund to that payer, not the
+    # placeholder default.
+    strict = quote()
+    strict.constraints = Constraints(min_vendor_score=95)
+    strict.buyer_address = "0xBUYER0000000000000000000000000000000001"
+    task = FirmTask(task_id="t_refund_addr", goal="ship firm", quote=strict, state=JobState.PAID)
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            vendors=demo_vendors(prefix="test"),
+            store=InMemoryCheckpointStore(),
+            performance=PerformanceStore({}),
+            procurer=DemoProcurer(),
+        )
+    )
+
+    assert completed.state == JobState.FAILED_REFUNDED
+    assert completed.refund is not None
+    assert completed.refund["to_address"] == "0xBUYER0000000000000000000000000000000001"
+
+
+def test_buyer_constraints_reach_sourcing_and_filter_vendors() -> None:
+    # Both demo vendors score below 95, so a strict buyer constraint must reject
+    # both and drive a refund. If constraints were dropped on the way to
+    # sourcing (the default is 60), the good vendor would deliver instead.
+    strict = quote()
+    strict.constraints = Constraints(min_vendor_score=95)
+    task = FirmTask(task_id="t_constraint_test", goal="ship firm", quote=strict, state=JobState.PAID)
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            vendors=demo_vendors(prefix="test"),
+            store=InMemoryCheckpointStore(),
+            performance=PerformanceStore({}),
+            procurer=DemoProcurer(),
+        )
+    )
+
+    assert completed.state == JobState.FAILED_REFUNDED
+    assert completed.provenance is not None
+    assert completed.provenance.vendors_vetted >= 2
+    # Every candidate was rejected by the score floor, none hired.
+    assert [r.reason for r in completed.provenance.vendors_rejected]
+    assert completed.provenance.hires == []
+
+
+def test_vendor_args_sends_job_params_verbatim_when_supplied():
+    """A vendor with a real schema must receive the buyer's params, not prose.
+
+    Payment happens before the vendor validates the body, so a generic shape is
+    not a soft failure — it is a paid-for 400.
+    """
+    from firm.graph import _vendor_args
+    from firm.models import FirmTask, Money, PlanItem, Quote
+    from datetime import datetime, timedelta, timezone
+
+    quote = Quote(
+        quote_id="q_x",
+        price=Money.usdt(500_000),
+        plan_summary=[PlanItem(subtask="snapshot", capability="market_snapshot")],
+        valid_until=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    subtask = quote.plan_summary[0]
+
+    # OKLink #2023's real documented schema.
+    oklink_params = {"chainIndex": "1", "address": "0x0000000000000000000000000000000000000000", "height": "21000000"}
+    task = FirmTask(task_id="t_x", goal="balance snapshot", quote=quote, params=oklink_params)
+    assert _vendor_args(task, subtask) == oklink_params
+    # No goal/subtask smuggled in alongside: the vendor gets exactly what was specified.
+    assert "goal" not in _vendor_args(task, subtask)
+
+    # With no params the previous generic shape is preserved, which is what the
+    # packages/mocks fixtures expect.
+    bare = FirmTask(task_id="t_y", goal="balance snapshot", quote=quote)
+    assert _vendor_args(bare, subtask) == {"goal": "balance snapshot", "subtask": "snapshot"}
+
+
+def test_firm_task_params_round_trip_through_postgres(tmp_path):
+    """params must survive the job row, or the worker sends {} to a paid vendor."""
+    from firm.models import FirmTask, Money, PlanItem, Quote
+    from datetime import datetime, timedelta, timezone
+
+    quote = Quote(
+        quote_id="q_rt",
+        price=Money.usdt(500_000),
+        plan_summary=[PlanItem(subtask="snapshot", capability="market_snapshot")],
+        valid_until=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    task = FirmTask(task_id="t_rt", goal="g", quote=quote, params={"chainIndex": "1"})
+    # Model round trip is the part that is pure; the DB round trip is covered by
+    # the live worker evals.
+    assert FirmTask.model_validate(task.model_dump(mode="json")).params == {"chainIndex": "1"}
+
+
+def test_provenance_economics_reconcile_exactly():
+    """user_price must equal vendor costs + books + margin.
+
+    actual_vendor_costs previously included the books cost, which is our own
+    expense and is already disclosed in its own block — so a judge adding the
+    published numbers up would have double-counted it on the one field the entry
+    asks them to trust.
+    """
+    from firm.graph import build_provenance
+    from firm.models import FirmTask, HireReceipt, Money, PlanItem, Quote
+    from datetime import datetime, timedelta, timezone
+
+    quote = Quote(
+        quote_id="q_e",
+        price=Money.usdt(100_000),
+        plan_summary=[PlanItem(subtask="market_snapshot", capability="market_snapshot")],
+        valid_until=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    task = FirmTask(task_id="t_e", goal="g", quote=quote)
+    state = {
+        "task": task,
+        "vendors": [],
+        "rejected": [],
+        "fired": [],
+        "hires": [
+            HireReceipt(agent_id="2023", subtask="market_snapshot", cost=Money.usdt(15),
+                        tx="0xreal", validation={"passed": True, "checks": []})
+        ],
+    }
+    receipt = build_provenance(task, state, "delivered")
+
+    vendors = int(receipt.economics.actual_vendor_costs.amount)
+    books = int(receipt.books.cost.amount)
+    margin = int(receipt.economics.margin_retained_or_absorbed["amount"])
+    price = int(receipt.economics.user_price.amount)
+
+    assert vendors == 15, "vendor costs must be vendor money only, not ours"
+    assert books == 0, "a simulated books call costs nothing and must not reduce our stated margin"
+    assert receipt.economics.margin_retained_or_absorbed["sign"] == "retained"
+    assert vendors + books + margin == price, "the published numbers must reconcile"
+
+
+def test_missing_documented_params_knows_what_a_vendor_declared():
+    """Payment happens before the vendor validates the body, so a call we know
+    cannot succeed must be skipped before it costs anything."""
+    from firm.graph import missing_documented_params
+    from firm.models import Money, VendorService
+
+    oklink = VendorService(
+        tool="Address Balance Snapshot",
+        price=Money.usdt(15),
+        capability="market_snapshot",
+        documented_example_args={
+            "args": {"chainIndex": "1", "address": "0x...", "height": "21000000"},
+            "source": "verbatim_json_literal_in_vendor_service_description",
+        },
+    )
+
+    # Job supplies everything the vendor documented.
+    assert missing_documented_params(oklink, {"chainIndex": "1", "address": "0xabc", "height": "21000000"}) == []
+    # Job supplies nothing useful: all three are missing, reported sorted.
+    assert missing_documented_params(oklink, {"goal": "market snapshot"}) == ["address", "chainIndex", "height"]
+    # Partial coverage still blocks, because the call would still 400.
+    assert missing_documented_params(oklink, {"chainIndex": "1"}) == ["address", "height"]
+
+
+def test_a_vendor_that_documents_nothing_is_not_blocked():
+    """Unknown is not a failure. Most of the marketplace documents nothing, and
+    treating silence as 'requires nothing' or as 'unusable' would both be wrong —
+    we simply cannot pre-check them."""
+    from firm.graph import missing_documented_params
+    from firm.models import Money, VendorService
+
+    undocumented = VendorService(tool="t", price=Money.usdt(10), capability="market_snapshot")
+    assert missing_documented_params(undocumented, {}) == []
+
+    empty_doc = VendorService(
+        tool="t", price=Money.usdt(10), capability="market_snapshot",
+        documented_example_args={"args": {}, "source": "x"},
+    )
+    assert missing_documented_params(empty_doc, {}) == []

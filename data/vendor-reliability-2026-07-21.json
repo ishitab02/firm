@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-07-21T00:00:00Z",
+  "method": {
+    "probe": "unpaid POST to each vendor's endpoint; read the HTTP 402 challenge",
+    "cost": "zero — no payment was signed or sent for any probe",
+    "what_it_proves": "endpoint liveness, x402 conformance, scheme support, and the price the vendor ACTUALLY charges",
+    "what_it_does_not_prove": "the shape or quality of a paid response body; that needs a paid call"
+  },
+  "population": "the 10 cheapest distinct agents offering market_snapshot in data/vendor-index.json",
+  "results": [
+    {"agent_id": "2023", "name": "Onchain Data Explorer", "verdict": "X402_OK", "latency_ms": 191, "listed_units": 15, "actual_units": 15, "schemes": ["exact", "aggr_deferred"]},
+    {"agent_id": "2013", "name": "CoinAnk OpenAPI", "verdict": "X402_OK", "latency_ms": 1110, "listed_units": 10000, "actual_units": 1000, "schemes": ["exact", "aggr_deferred"]},
+    {"agent_id": "2135", "name": "Newsliquid", "verdict": "X402_OK", "latency_ms": 293, "listed_units": 2000, "actual_units": 2000, "schemes": ["exact"]},
+    {"agent_id": "5524", "name": "API2ASP Factory", "verdict": "X402_OK", "latency_ms": 1759, "listed_units": 10000, "actual_units": 10000, "schemes": ["exact"]},
+    {"agent_id": "5557", "name": "Pitchook", "verdict": "X402_OK", "latency_ms": 1343, "listed_units": 20000, "actual_units": 20000, "schemes": ["exact"]},
+    {"agent_id": "3209", "name": "Clawby", "verdict": "X402_OK_BUT_PRICE_MISMATCH", "latency_ms": 1384, "listed_units": 5000, "actual_units": 3000000, "ratio": 600, "schemes": ["exact"]},
+    {"agent_id": "2012", "name": "Barker Yield Agent", "verdict": "HTTP_404", "latency_ms": 850, "detail": "listed endpoint returns an HTML 404 page"},
+    {"agent_id": "2143", "name": "Predexon", "verdict": "HTTP_404", "latency_ms": 974, "detail": "{\"error\":\"not_found\"}"},
+    {"agent_id": "5175", "name": "Lumora Stock Data Hub", "verdict": "UNREACHABLE", "latency_ms": 133, "detail": "fetch failed"},
+    {"agent_id": "6560", "name": "SignalForge AI", "verdict": "UNREACHABLE", "latency_ms": 12005, "detail": "no response within 12s"}
+  ],
+  "findings": {
+    "reachable_and_x402_conformant": "6 of 10",
+    "dead_or_misrouted": "4 of 10 (2 unreachable, 2 return 404 at their listed endpoint)",
+    "price_mismatch_against_listing": "2 of 6 working vendors",
+    "worst_mismatch": "Clawby #3209 is listed at 5000 base units and its live 402 demands 3000000 — 600x the listed price"
+  },
+  "why_this_matters": [
+    "A marketplace listing's price is not what the vendor charges. An agent that trusts the listing and pays whatever the 402 asks would have paid 600x its expected cost on one call.",
+    "The Firm verifies the 402 amount against the caller's max_amount and the per-call cap BEFORE signing, so this vendor is refused rather than paid. That is the single best real-world justification for the spend-cap design.",
+    "40% of listed market_snapshot vendors could not be reached at all, which is why vendor selection must come from observed reliability rather than listings (PLAN D4)."
+  ]
+}

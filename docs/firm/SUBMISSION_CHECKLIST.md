@@ -6,7 +6,9 @@ Do not submit until these are true.
 - Ishita Agentic Wallet and ASP registration path are confirmed.
 - One ASP lists both services: Firm Express and Firm Projects.
 - `apps/firm-gateway` serves all five tools: `express_run`, `get_quote`, `execute`, `get_status`, `get_result`.
-- `packages/procurer` has completed the human-triggered real payment spike.
+- [x] `packages/procurer` has completed the human-triggered real payment spike.
+      DONE 2026-07-21: tx `0x493a34a5b33dc8c17760a81d4b028f298ccb9264d19dd1032e9549b182f26072`
+      on X Layer to OKLink #2023, with idempotency re-fire proving no double-pay.
 - F3 worker has a live Postgres queue smoke passing.
 - F4 golden evals pass against the worker.
 - `data/vendor-index.json` is generated from a real marketplace scan, not invented data.

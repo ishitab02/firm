@@ -1,0 +1,57 @@
+{
+  "generated_at": "2026-07-21T07:36:33.282Z",
+  "provenance": {
+    "purpose": "CONTROLLED SUBSET for the G2 integration run. Not the production index.",
+    "why": "Sourcing ranks by effective score, and the 100-score vendors in the full index publish no request schema. Pointing a live run at them would send a generic body, earn a 400, and pay for it. This subset contains only the vendor that documents its own schema, so G2 tests the chain rather than the marketplace-wide schema gap.",
+    "source": "data/vendor-index.json, filtered to agent 2023 / the documented Address Balance Snapshot service",
+    "do_not_use_for": "the demo or the listing; use data/vendor-index.json"
+  },
+  "vendors": [
+    {
+      "agent_id": "2023",
+      "name": "Onchain Data Explorer",
+      "endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_address_balance_history",
+      "chain_index": 196,
+      "communication_address": "0x0F1375cF76E56dFD559830183C8ed4EeAE7e7682",
+      "services": [
+        {
+          "tool": "Address Balance Snapshot",
+          "service_id": "17305",
+          "service_type": "A2MCP",
+          "endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_address_balance_history",
+          "price": {
+            "amount": "15",
+            "decimals": 6,
+            "token": "USDT"
+          },
+          "price_unresolved_reason": null,
+          "fee_amount_declared": 0.000015,
+          "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+          "capability": "market_snapshot",
+          "capability_source": "inferred_from_service_name_and_description",
+          "description": "Address balance at a block — POST.\nPOST only (GET=405). Requires chainIndex, address, height. Returns the balance at that block height.\ne.g. POST {\"chainIndex\":\"1\",\"address\":\"0x...\",\"height\":\"21000000\"}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1",
+              "address": "0x...",
+              "height": "21000000"
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          }
+        }
+      ],
+      "services_dropped": 30,
+      "kya_base_score": 93,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "marketplace_feedback_rate": 92.86,
+      "marketplace_security_rate": 4.86,
+      "sold_count": 1572,
+      "categories": [
+        "Software services"
+      ],
+      "flags": [],
+      "flags_source": "derived_by_tools/vendor-index/generate.js",
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
+    }
+  ]
+}

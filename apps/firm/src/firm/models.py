@@ -51,6 +51,14 @@ class Quote(BaseModel):
     guarantee: str = "full refund if not delivered"
     quoted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     pricing_mode: Literal["QUOTED_AMOUNT", "TIERS"] = "TIERS"
+    # The buyer's sourcing constraints, carried on the stored job quote so the
+    # worker honours them. Absent on a bare get_quote response and on legacy
+    # jobs, where it defaults to the permissive baseline.
+    constraints: Constraints = Field(default_factory=Constraints)
+    # The facilitator-verified payer, captured by the gateway at execute so a
+    # refund pays back the real buyer. None on bypassed runs (no real payer),
+    # where the refund falls back to the configured default address.
+    buyer_address: str | None = None
 
 
 class QuoteError(BaseModel):
@@ -84,6 +92,11 @@ class VendorService(BaseModel):
     tool: str
     price: Money
     capability: str
+    #: What the vendor published about its own request body, when it published
+    #: anything: {"args": {...}, "source": "..."} from tools/vendor-index.
+    #: None means unknown — never "takes no arguments". Only a handful of
+    #: marketplace services document anything at all.
+    documented_example_args: dict[str, Any] | None = None
 
 
 class VendorIndexEntry(BaseModel):
@@ -197,6 +210,14 @@ class FirmTask(BaseModel):
     task_id: str
     goal: str
     quote: Quote
+    #: The vendor-specific request body for this job. Real vendors have real
+    #: schemas, and payment happens before a vendor validates the body, so
+    #: sending a generic shape means paying for a 400.
+    #:
+    #: Buyer constraints deliberately do NOT live here — they ride on
+    #: `quote.constraints`, because they are quoted against. One source of
+    #: truth; do not add a second.
+    params: dict[str, Any] = Field(default_factory=dict)
     state: JobState = JobState.PLANNING
     progress: list[ProgressItem] = Field(default_factory=list)
     deliverable: dict[str, Any] | None = None
