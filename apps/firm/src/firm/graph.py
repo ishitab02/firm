@@ -268,10 +268,18 @@ def build_provenance(
     state: FirmGraphState,
     guarantee_status: str,
 ) -> ProvenanceReceipt:
+    # actual_vendor_costs means what it says: money paid to VENDORS. The books
+    # call is our own cost and is already disclosed in its own block, so folding
+    # it in here made the receipt double-count it to any reader who added the
+    # numbers up — on the very field the entry asks judges to trust.
+    #
+    # Margin is still computed against total outlay (vendors + books), so the
+    # three published numbers reconcile exactly:
+    #     user_price = actual_vendor_costs + books.cost + margin_retained
     vendor_costs = _sum_money([hire.cost for hire in state.get("hires", [])])
     books_cost = Money.usdt(50_000)
-    actual_costs = Money.usdt(vendor_costs.units() + books_cost.units())
-    margin = task.quote.price.units() - actual_costs.units()
+    total_outlay = vendor_costs.units() + books_cost.units()
+    margin = task.quote.price.units() - total_outlay
     return ProvenanceReceipt(
         task_id=task.task_id,
         goal=task.goal,
@@ -282,7 +290,7 @@ def build_provenance(
         hires=state.get("hires", []),
         economics=Economics(
             user_price=task.quote.price,
-            actual_vendor_costs=actual_costs,
+            actual_vendor_costs=vendor_costs,
             margin_retained_or_absorbed={
                 "amount": str(abs(margin)),
                 "sign": "retained" if margin >= 0 else "absorbed",

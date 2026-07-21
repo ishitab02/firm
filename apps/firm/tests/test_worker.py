@@ -244,3 +244,44 @@ def test_firm_task_params_round_trip_through_postgres(tmp_path):
     # Model round trip is the part that is pure; the DB round trip is covered by
     # the live worker evals.
     assert FirmTask.model_validate(task.model_dump(mode="json")).params == {"chainIndex": "1"}
+
+
+def test_provenance_economics_reconcile_exactly():
+    """user_price must equal vendor costs + books + margin.
+
+    actual_vendor_costs previously included the books cost, which is our own
+    expense and is already disclosed in its own block — so a judge adding the
+    published numbers up would have double-counted it on the one field the entry
+    asks them to trust.
+    """
+    from firm.graph import build_provenance
+    from firm.models import FirmTask, HireReceipt, Money, PlanItem, Quote
+    from datetime import datetime, timedelta, timezone
+
+    quote = Quote(
+        quote_id="q_e",
+        price=Money.usdt(100_000),
+        plan_summary=[PlanItem(subtask="market_snapshot", capability="market_snapshot")],
+        valid_until=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    task = FirmTask(task_id="t_e", goal="g", quote=quote)
+    state = {
+        "task": task,
+        "vendors": [],
+        "rejected": [],
+        "fired": [],
+        "hires": [
+            HireReceipt(agent_id="2023", subtask="market_snapshot", cost=Money.usdt(15),
+                        tx="0xreal", validation={"passed": True, "checks": []})
+        ],
+    }
+    receipt = build_provenance(task, state, "delivered")
+
+    vendors = int(receipt.economics.actual_vendor_costs.amount)
+    books = int(receipt.books.cost.amount)
+    margin = int(receipt.economics.margin_retained_or_absorbed["amount"])
+    price = int(receipt.economics.user_price.amount)
+
+    assert vendors == 15, "vendor costs must be vendor money only, not ours"
+    assert receipt.economics.margin_retained_or_absorbed["sign"] == "retained"
+    assert vendors + books + margin == price, "the published numbers must reconcile"
