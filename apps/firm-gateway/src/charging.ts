@@ -16,6 +16,24 @@
  * docs/status/F2.md.
  */
 
+import { okxCredentialsFromEnv, signOkxRequest, splitForSigning } from "./okx-auth.js";
+
+/**
+ * Headers for a facilitator call: signed when OKX credentials are configured,
+ * bare otherwise.
+ *
+ * Bare is correct for the local fake facilitator the tests run against, and it
+ * is what keeps the existing suite meaningful. Against the real facilitator an
+ * unsigned call is rejected — which fails closed, so the worst case is a 402 to
+ * the buyer rather than free work.
+ */
+function facilitatorHeaders(url: string, body: string): Record<string, string> {
+  const credentials = okxCredentialsFromEnv();
+  if (!credentials) return { "content-type": "application/json" };
+  const { requestPath } = splitForSigning(url);
+  return signOkxRequest(credentials, { method: "POST", requestPath, body });
+}
+
 export type ChargeSpec = {
   /** Base-unit integer string. */
   amount: string;
@@ -121,10 +139,14 @@ export async function verifyPayment(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
   try {
-    const response = await fetch(facilitatorUrlFor(options.facilitatorUrl, "verify"), {
+    const url = facilitatorUrlFor(options.facilitatorUrl, "verify");
+    // Serialise once and sign that exact string: re-serialising can reorder
+    // keys and invalidate the signature.
+    const body = JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] });
+    const response = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] }),
+      headers: facilitatorHeaders(url, body),
+      body,
       signal: controller.signal
     });
     if (!response.ok) {
@@ -201,10 +223,12 @@ export async function settlePayment(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
   try {
-    const response = await fetch(facilitatorUrlFor(options.facilitatorUrl, "settle"), {
+    const url = facilitatorUrlFor(options.facilitatorUrl, "settle");
+    const body = JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] });
+    const response = await fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] }),
+      headers: facilitatorHeaders(url, body),
+      body,
       signal: controller.signal
     });
     if (!response.ok) {
