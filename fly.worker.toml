@@ -21,6 +21,10 @@ primary_region = "sin"
   # The books line stays SIMULATED and costs 0 until Treasury is listed and a
   # human turns this on. See docs/status/F1.md.
   ENABLE_TREASURY_BOOKS = "false"
+  # Liveness surface. Not published — Fly's checks reach it over the private
+  # network, and nothing outside this stack needs it.
+  WORKER_HEALTH_PORT = "8788"
+  WORKER_HEALTH_HOST = "::"
 
 # Secrets, set with `fly secrets set -a firm-worker`:
 #   DATABASE_URL, PROCURER_AUTH_TOKEN
@@ -29,6 +33,25 @@ primary_region = "sin"
 # no scale-to-zero.
 [processes]
   worker = "firm-worker run"
+
+# The failure this exists for is a HANG, not a crash. Fly restarts a process
+# that exits; a wedged loop never exits, and the visible symptom is nothing at
+# all — jobs sit at `paid` while the gateway keeps taking money. The endpoint
+# reports 503 once the loop stops ticking, so a wedge becomes a restart.
+#
+# A machine-level [checks] block rather than [[services]]: this needs no
+# published port. A worker reachable from the internet would be a
+# spending-adjacent surface for no reason.
+[checks]
+  [checks.loop_alive]
+    type = "http"
+    port = 8788
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "get"
+    path = "/health"
+    processes = ["worker"]
 
 [[vm]]
   size = "shared-cpu-1x"

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     #: is one vendor call (~65s) — see assert_stale_window_is_safe, which
     #: refuses to start a worker that violates this.
     worker_stale_after_seconds: int = 900
+    #: Liveness endpoint for the worker loop. 0 disables it, which is right for
+    #: one-shot CLI commands and tests. Bind :: in a container — Fly's private
+    #: network is IPv6 and a 0.0.0.0 bind answers nothing there.
+    worker_health_port: int = 0
+    worker_health_host: str = "::"
 
 
 @lru_cache

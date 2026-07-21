@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import Settings
 from .graph import FirmGraphState, build_graph
+from .health import Heartbeat, serve_health
 from .models import FirmTask, VendorIndexEntry
 from .procurer import HttpProcurer, Procurer
 from .sourcing import load_vendor_index
@@ -131,10 +132,26 @@ async def run_loop(settings: Settings, poll_seconds: float = 2.0) -> None:
         with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(getattr(signal, signame), stop.set)
 
-    while not stop.is_set():
-        result = await run_one(settings)
-        if not result.claimed:
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=poll_seconds)
-            except TimeoutError:
-                pass
+    # Liveness is derived from this loop, not from the process: a hang is not an
+    # exit, so a platform restart policy alone never notices. See health.py.
+    heartbeat = Heartbeat(stale_after_seconds=settings.worker_stale_after_seconds)
+    health_server = None
+    if settings.worker_health_port:
+        health_server = await serve_health(heartbeat, settings.worker_health_host, settings.worker_health_port)
+
+    try:
+        while not stop.is_set():
+            heartbeat.tick()
+            result = await run_one(settings)
+            # Stamp again after the job: a long run should not read as a stall
+            # the moment it finishes.
+            heartbeat.tick(result.task.task_id if result.task else None)
+            if not result.claimed:
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=poll_seconds)
+                except TimeoutError:
+                    pass
+    finally:
+        if health_server is not None:
+            health_server.close()
+            await health_server.wait_closed()
