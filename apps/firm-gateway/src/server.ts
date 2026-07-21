@@ -16,6 +16,7 @@ import {
 import { ensureGatewayTables, pool } from "./db.js";
 import { mcpDispatch } from "./mcp.js";
 import { expressJobTypes, normaliseExpressArgs } from "./express-args.js";
+import { fulfilmentFailure, readFulfilmentMode } from "./fulfilment.js";
 import { quotePrice, estimatePlan, PricingMode } from "./pricing.js";
 import { usdt, units } from "./money.js";
 
@@ -526,6 +527,28 @@ if (isPublicBind && chargingMode() === "bypass" && process.env.ALLOW_PUBLIC_BYPA
       "ALLOW_PUBLIC_BYPASS=true if you genuinely mean to serve free work."
   );
   process.exit(1);
+}
+
+// Never charge real money for simulated work. The gateway and the procurer have
+// independent money switches and one pairing is incoherent — see fulfilment.ts.
+// Checked at boot rather than per request: a per-request check would fail the
+// buyer only after their money had already moved.
+if (chargingMode() === "enforce") {
+  const procurerUrl = process.env.PROCURER_URL;
+  if (!procurerUrl) {
+    console.warn(
+      "[fulfilment] PROCURER_URL is not set, so the gateway cannot confirm that paid jobs are " +
+        "fulfilled for real. Set it in production."
+    );
+  } else {
+    const mode = await readFulfilmentMode(procurerUrl);
+    const failure = fulfilmentFailure({ charging: true, mode });
+    if (failure) {
+      console.error(`[fulfilment] refusing to start: ${failure}`);
+      process.exit(1);
+    }
+    console.log("[fulfilment] procurer confirmed live: real payments on, wallet key present");
+  }
 }
 
 server.listen(port, host, () => {
