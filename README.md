@@ -8,10 +8,31 @@ Entry owner: **Ishita** (her hackathon submission, her AI core). Payments and in
 
 OKX's founder says the future is one-person companies running agent workforces. The marketplace has 60+ workers and no employer. The Firm is the employer.
 
+## Status, stated plainly
+
+Live at **https://firm-gateway.fly.dev** — `onchainos agent x402-check` returns
+`valid: true` against it.
+
+**Two real third-party procurement transactions. Zero customer revenue so far.**
+
+Those two payments are real money to a real marketplace agent on X Layer, and
+they prove the buyer path works end to end. They are outbound *costs*, not
+revenue, and nobody has yet bought anything from The Firm. Anywhere those
+numbers appear, they appear with that sentence attached.
+
+| proven | not yet proven |
+|---|---|
+| Public endpoint passes OKX's own x402 validator | A customer can successfully pay |
+| The Firm pays real third-party agents; idempotency holds under retry | Demand, or sustainable unit economics |
+| Facilitator auth works; a forged payment is rejected by OKX | A valid authorization settling end to end |
+| 95 agents probed: a measurable reliability problem exists | Long-term moat, or outcome quality at scale |
+
 ## Why this version wins (the three upgrades over a generic orchestrator)
 
 1. **Fixed quote, guarantee premium.** The Firm quotes a fixed price up front and bears execution risk. When a hired agent fails and a replacement is hired, the overrun comes out of The Firm's margin, not the user's price. The margin is not markup: it buys vetting, validation, retries, and a guaranteed outcome. Total failure = full refund.
-2. **Darwinian fallback.** The Firm does not trust its hires. Every deliverable passes a validation stack. Failures are recorded, the vendor's trust score is downgraded in our performance database, and the next-best candidate is hired automatically. The user never sees the hiccup. Every job The Firm runs makes its vendor intelligence better: it does not just consume reputation, it manufactures it.
+2. **Adaptive fallback, on measured evidence.** The Firm does not trust its hires. It background-checks every candidate before paying — a free 402 probe that reads what the vendor will *actually* charge, not what it advertises. Deliverables then pass a validation stack; failures are recorded, the vendor's score drops, and the next candidate is hired automatically. The user never sees the hiccup.
+
+   This is deliberately **not** claimed as "Darwinian learning". The full loop — a vendor ranks high, fails a paid job, drops, and ranks lower on a later job that then performs better — has not yet been demonstrated across enough real outcomes to assert. What exists today is preflight intelligence over 95 probed agents plus accumulated performance evidence, which is a smaller and true claim.
 3. **Two services, two price shapes.** "Firm Express": one fixed cheap price for single-vendor jobs, instant, repeatable (the Revenue Rocket hero). "Firm Projects": free quote, then execution at the quoted price (the flagship demo).
 
 ## Architecture
