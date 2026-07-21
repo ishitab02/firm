@@ -19,7 +19,11 @@ class Settings(BaseSettings):
     enable_treasury_books: bool = False
     treasury_books_url: str | None = Field(default=None)
     default_refund_address: str = "SIMULATED:refund-address"
-    worker_stale_after_seconds: int = 300
+    #: How long a job may sit un-updated before another worker reclaims it.
+    #: MUST exceed the longest gap between two store.transition() calls, which
+    #: is one vendor call (~65s) — see assert_stale_window_is_safe, which
+    #: refuses to start a worker that violates this.
+    worker_stale_after_seconds: int = 900
 
 
 @lru_cache

@@ -417,3 +417,33 @@ def test_a_refunded_job_reports_absorbed_not_retained() -> None:
     # And the magnitude is exactly what we paid out, not the quoted price.
     outlay = economics.actual_vendor_costs.units() + completed.provenance.books.cost.units()
     assert economics.margin_retained_or_absorbed["amount"] == str(outlay)
+
+
+def test_a_worker_refuses_a_stale_window_that_can_fire_mid_job() -> None:
+    """A live-but-slow worker must never look dead.
+
+    If the window can elapse during one vendor call, a second worker claims the
+    same job and restarts it from planning. Idempotency absorbs that only while
+    both walk the same candidate order — and sourcing re-ranks against
+    vendor_performance, which the first worker is concurrently mutating.
+    Different order, different vendor, new idempotency key, real second payment.
+    """
+    import pytest
+    from firm.config import Settings
+    from firm.worker import assert_stale_window_is_safe
+
+    # A window at or below one vendor call is the dangerous case: the job goes
+    # stale while the call it is waiting on is still in flight.
+    with pytest.raises(ValueError, match="too small"):
+        assert_stale_window_is_safe(Settings(worker_stale_after_seconds=60))
+
+    with pytest.raises(ValueError, match="run twice"):
+        assert_stale_window_is_safe(Settings(worker_stale_after_seconds=120))
+
+    # The old 300s default is in fact safe — but only because every candidate
+    # outcome now checkpoints. Before that fix, five 60s vendor failures in a
+    # row produced no heartbeat at all and walked the job straight past it.
+    assert_stale_window_is_safe(Settings(worker_stale_after_seconds=300))
+
+    # The shipped default carries much more slack than the invariant needs.
+    assert_stale_window_is_safe(Settings())
