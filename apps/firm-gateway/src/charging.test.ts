@@ -194,11 +194,25 @@ describe("header handling", () => {
     expect(paymentHeaderFrom({})).toBeUndefined();
   });
 
-  it("encodes a settlement the buyer can decode", () => {
-    const encoded = encodeSettlement({ ok: true, transaction: "0xabc", payer: "0xbuyer", amount: "1", raw: {} });
+  // Shape verified against the real thing: the PAYMENT-RESPONSE headers OKLink
+  // #2023 returned for G1 and G2 decode to
+  //   {"success":true,"transaction":"0x…","network":"eip155:196","payer":"0x…"}
+  // so `success` is the field the marketplace actually uses. We emit `status`
+  // too, since the x402 spec examples use that.
+  it("encodes a settlement in the shape real marketplace ASPs emit", () => {
+    const encoded = encodeSettlement({
+      ok: true,
+      transaction: "0xabc",
+      payer: "0xbuyer",
+      amount: "1",
+      network: "eip155:196",
+      raw: {}
+    });
     expect(JSON.parse(Buffer.from(encoded, "base64").toString("utf8"))).toEqual({
+      success: true,
       status: "success",
       transaction: "0xabc",
+      network: "eip155:196",
       payer: "0xbuyer",
       amount: "1"
     });

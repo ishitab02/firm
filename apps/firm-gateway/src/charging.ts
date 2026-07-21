@@ -137,7 +137,15 @@ export async function verifyPayment(
 }
 
 export type SettleResult =
-  | { ok: true; transaction: string; payer?: string; amount?: string; raw: Record<string, unknown> }
+  | {
+      ok: true;
+      transaction: string;
+      payer?: string;
+      amount?: string;
+      /** CAIP-2 chain the settlement landed on, when the facilitator says. */
+      network?: string;
+      raw: Record<string, unknown>;
+    }
   | { ok: false; reason: string };
 
 /**
@@ -204,6 +212,7 @@ export async function settlePayment(
       transaction,
       payer: typeof raw.payer === "string" ? raw.payer : undefined,
       amount: typeof raw.amount === "string" ? raw.amount : undefined,
+      network: typeof raw.network === "string" ? raw.network : undefined,
       raw
     };
   } catch (error) {
@@ -233,8 +242,16 @@ export function paymentHeaderFrom(headers: Record<string, string | string[] | un
 export function encodeSettlement(result: Extract<SettleResult, { ok: true }>): string {
   return Buffer.from(
     JSON.stringify({
+      // Real ASPs on this marketplace emit `success: true`, not
+      // `status: "success"` — verified by decoding the PAYMENT-RESPONSE headers
+      // OKLink #2023 returned for the G1 and G2 payments:
+      //   {"success":true,"transaction":"0x…","network":"eip155:196","payer":"0x…"}
+      // We emit both, because a buyer written against the marketplace's actual
+      // convention would read a status-only header as an unsettled payment.
+      success: true,
       status: "success",
       transaction: result.transaction,
+      network: result.network ?? "",
       payer: result.payer ?? "",
       amount: result.amount ?? ""
     }),
