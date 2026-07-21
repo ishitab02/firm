@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "okx-ai": {
+      "source": "okx/onchainos-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-ai/SKILL.md",
+      "computedHash": "e48de1c58384557989e217e551facbc62185458a351050d128daed39357b0bec"
+    }
+  }
+}
