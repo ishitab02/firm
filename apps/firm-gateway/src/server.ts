@@ -15,6 +15,7 @@ import {
 } from "./charging.js";
 import { ensureGatewayTables, pool } from "./db.js";
 import { mcpDispatch } from "./mcp.js";
+import { expressJobTypes, normaliseExpressArgs } from "./express-args.js";
 import { quotePrice, estimatePlan, PricingMode } from "./pricing.js";
 import { usdt, units } from "./money.js";
 
@@ -63,12 +64,6 @@ function pricingMode(): PricingMode {
  */
 function expressEnabled(): boolean {
   return process.env.EXPRESS_ENABLED === "true";
-}
-function expressJobTypes(): string[] {
-  return (process.env.EXPRESS_JOB_TYPES ?? "market_snapshot")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
 }
 /** Fixed Express price in base units. INTERFACES §1A placeholder: 0.5 USDT. */
 function expressPriceUnits(): string {
@@ -204,10 +199,11 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
   }
 
   if (name === "express_run") {
-    const parsed = z.object({ job_type: z.string(), params: z.record(z.any()).optional() }).safeParse(args);
-    if (!parsed.success) return { error: { code: "INVALID_ARGS", detail: "job_type is required" } };
-    const capability = EXPRESS_CAPABILITY[parsed.data.job_type];
-    if (!capability) return { error: { code: "UNKNOWN_JOB_TYPE", detail: parsed.data.job_type } };
+    const normalised = normaliseExpressArgs(args);
+    if (!normalised) return { error: { code: "INVALID_ARGS", detail: "job_type is required" } };
+    const capability = EXPRESS_CAPABILITY[normalised.job_type];
+    if (!capability) return { error: { code: "UNKNOWN_JOB_TYPE", detail: normalised.job_type } };
+    const parsed = { data: normalised };
 
     // Express is a fixed-price single-capability job. Insert it paid and drive
     // it to completion synchronously (INTERFACES §1A returns the deliverable
@@ -324,8 +320,9 @@ async function chargeGate(
   if (!PAID_TOOLS.has(name)) return { settled: null };
 
   if (name === "express_run") {
-    const parsed = z.object({ job_type: z.string(), params: z.record(z.any()).optional() }).safeParse(args);
-    if (!parsed.success) return { status: 200, body: { error: { code: "INVALID_ARGS", detail: "job_type is required" } } };
+    const normalised = normaliseExpressArgs(args);
+    if (!normalised) return { status: 200, body: { error: { code: "INVALID_ARGS", detail: "job_type is required" } } };
+    const parsed = { data: normalised };
     // Honest, free rejection until a human locks the pool (no charge, no write).
     if (!expressEnabled()) {
       return {
