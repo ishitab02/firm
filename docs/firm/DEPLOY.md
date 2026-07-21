@@ -115,14 +115,51 @@ docker compose -f docker-compose.deploy.yml --env-file .env.deploy \
   exec db psql -U firm -d firm -c "SELECT count(*) FROM firm_jobs;"
 ```
 
-## 4. Public HTTPS
+## 4. Public HTTPS — what actually shipped
 
-The container speaks plain HTTP on 8790. OKX needs public HTTPS, so put it
-behind platform TLS (Railway, Render, Fly) or a reverse proxy with a real
-certificate. Terminate TLS in front; do not add it to the container.
+Sections 1–3 use docker-compose, which is the local path. **The live deployment
+is Fly**, and these are the commands that produced it:
 
-Only the gateway is exposed. The procurer, worker and database must stay on the
-internal network.
+```bash
+# Postgres: Neon free tier, ap-southeast-1 to match Fly's sin.
+# Use the DIRECT connection string, not the -pooler one (see below).
+cd apps/firm && DATABASE_URL="postgresql://…" uv run firm-worker migrate
+
+TOKEN=$(openssl rand -hex 32)
+fly secrets set -a firm-procurer PROCURER_AUTH_TOKEN="$TOKEN" DATABASE_URL="…"
+fly secrets set -a firm-worker   PROCURER_AUTH_TOKEN="$TOKEN" DATABASE_URL="…"
+fly secrets set -a firm-gateway  DATABASE_URL="…" \
+  FIRM_PAYTO_ADDRESS="0x…" FIRM_CHARGE_ASSET="0x779ded…736" FIRM_CHARGE_NETWORK="eip155:196"
+
+fly deploy --config fly.procurer.toml --remote-only
+fly deploy --config fly.gateway.toml  --remote-only
+fly deploy --config fly.worker.toml   --remote-only
+```
+
+Only the gateway gets a public address. `fly.procurer.toml` has no
+`[http_service]` on purpose, so Fly allocates it no IP — running
+`fly ips allocate` on that app would publish a spending API to the internet.
+
+Three deployment details that are load-bearing:
+
+- **`HOST=::`, not `0.0.0.0`.** Fly's private network (6PN) is IPv6-only, and a
+  Node server bound to `0.0.0.0` listens on IPv4 only. Get this wrong and
+  `firm-procurer.internal:8787` resolves and then refuses every connection.
+- **Use Neon's direct endpoint, not `-pooler`.** Both work and both support
+  `pg_advisory_xact_lock`, so cap enforcement is safe either way — but three
+  long-lived pools gain nothing from PgBouncer, and psycopg3's automatic
+  prepared statements are a known hazard in transaction pooling mode.
+- **Check the worker machine count.** Fly creates a standby per process group.
+  It must be `stopped`; two *started* workers is the stale-reclaim scenario.
+  `fly machines list -a firm-worker`.
+
+Verify from outside:
+
+```bash
+curl -s https://firm-gateway.fly.dev/health
+curl -s --max-time 8 https://firm-procurer.fly.dev/health   # must NOT resolve
+fly ssh console -a firm-worker -C "python -c \"import httpx;print(httpx.get('http://firm-procurer.internal:8787/health').json())\""
+```
 
 ## 5. Run OKX's own validator — before submitting
 
@@ -130,9 +167,21 @@ This is the whole point of choosing the A2MCP ("API service") listing type over
 A2A: the path can be checked before review, instead of during it.
 
 ```bash
-onchainos agent x402-check --endpoint https://<your-domain> --body '{"tool":"express_run","args":{"job_type":"market_snapshot","params":{"symbol":"BTC"}}}'
+onchainos agent x402-check --endpoint https://firm-gateway.fly.dev \
+  --body '{"tool":"express_run","args":{"job_type":"market_snapshot","params":{"symbol":"BTC"}}}'
 onchainos agent gate-check --role ASP
 ```
+
+Run on 2026-07-21 against the live endpoint:
+
+```json
+{"ok":true,"data":{"valid":true,"amountHuman":0.1,"amountMinimal":"100000",
+  "asset":"0x779ded0c9e1022225f8e0630b35a9b54be713736","decimals":6,
+  "network":"eip155:196","payTo":"0xc029…","scheme":"exact","x402Version":2}}
+```
+
+`tokenSymbol` comes back `UNKNOWN`, which did not block validation — the asset
+address is what matters and it is correct.
 
 Do not submit the listing until `x402-check` passes. Treasury was rejected twice
 with "unable to reach your Agent's service endpoint" and "has not passed x402
