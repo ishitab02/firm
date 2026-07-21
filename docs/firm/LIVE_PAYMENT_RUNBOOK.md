@@ -1,7 +1,11 @@
 # Live payment runbook (F1)
 
-**Nothing in this file has been executed.** Every command below is prepared for a
-human to run. The first live payment and the first live refund are
+**STATUS: G1 EXECUTED 2026-07-21.** The first live payment has been fired by a
+human (Poulav) and succeeded — tx
+`0x493a34a5b33dc8c17760a81d4b028f298ccb9264d19dd1032e9549b182f26072`, X Layer,
+0.000015 USD₮0 to OKLink #2023. See docs/status/F1.md for the full evidence and
+the idempotency proof. The first live REFUND is still unfired and still blocked
+(§4). Every command below remains prepared for a human to run. The first live payment and the first live refund are
 human-triggered by rule (CLAUDE.md non-negotiables, PLAN gate G1).
 
 Prepared: 2026-07-20. Owner: Poulav (F1).
@@ -213,7 +217,7 @@ Note the endpoint already carries a path, so `toolUrl` will use it verbatim
 rather than appending `/tools/<tool>` — which is the behaviour the unit test
 `toolUrl` pins.
 
-**This has not been run.** It needs a human go and a funded `FIRM_WALLET_KEY`.
+**RUN 2026-07-21 and it succeeded.** Payer `0xc0296012cfbb0e6df5da7158b65dbc46dd9650e0`.
 
 ## 6. Still open, needs a human
 
