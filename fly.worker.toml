@@ -1,0 +1,36 @@
+# The brain. Claims paid jobs and runs the six-stage graph.
+#
+#   fly deploy --config fly.worker.toml
+#
+# No services and no public address: it only polls Postgres and calls the
+# procurer over 6PN. Holds no key.
+#
+# This is the process everyone forgets to deploy. Without it the gateway takes
+# payment, writes a job, and returns PENDING forever — which from a buyer's
+# side is indistinguishable from an agent that took the money and vanished.
+app = "firm-worker"
+primary_region = "sin"
+
+[build]
+  dockerfile = "apps/firm/Dockerfile"
+
+[env]
+  PROCURER_URL = "http://firm-procurer.internal:8787"
+  VENDOR_INDEX_PATH = "/app/data/vendor-index.json"
+  FIRM_PRICING_MODE = "TIERS"
+  # The books line stays SIMULATED and costs 0 until Treasury is listed and a
+  # human turns this on. See docs/status/F1.md.
+  ENABLE_TREASURY_BOOKS = "false"
+
+# Secrets, set with `fly secrets set -a firm-worker`:
+#   DATABASE_URL, PROCURER_AUTH_TOKEN
+
+# A long-poll loop, not a request handler: it must stay up, so no autostop and
+# no scale-to-zero.
+[processes]
+  worker = "firm-worker run"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["worker"]
