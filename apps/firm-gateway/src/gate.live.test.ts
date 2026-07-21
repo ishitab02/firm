@@ -51,6 +51,43 @@ async function callTool(tool: string, args: unknown, headers: Record<string, str
   return { status: response.status, headers: response.headers, body: await response.json() };
 }
 
+
+/**
+ * A stand-in procurer that reports a fully live fulfilment mode.
+ *
+ * These suites test the PAYMENT boundary, not fulfilment coherence — but the
+ * gateway now refuses to start in enforce mode unless its procurer confirms it
+ * will do real work and can honour a refund. Pointing the spawned gateways at
+ * this keeps that guard exercised (rather than bypassed by a test-only escape
+ * hatch, which is the kind of flag that eventually ships) while letting the
+ * payment tests get past boot.
+ */
+let fulfilmentStub: http.Server | undefined;
+let fulfilmentStubUrl = "";
+
+async function startFulfilmentStub() {
+  if (fulfilmentStubUrl) return fulfilmentStubUrl;
+  fulfilmentStub = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        service: "firm-procurer",
+        real_payments_enabled: true,
+        real_refunds_enabled: true,
+        wallet_key_present: true
+      })
+    );
+  });
+  await new Promise<void>((resolve) => fulfilmentStub!.listen(0, "127.0.0.1", resolve));
+  fulfilmentStubUrl = `http://127.0.0.1:${(fulfilmentStub.address() as AddressInfo).port}`;
+  return fulfilmentStubUrl;
+}
+
+afterAll(async () => {
+  if (fulfilmentStub) await new Promise((resolve) => fulfilmentStub!.close(resolve));
+});
+
 suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
   beforeAll(async () => {
     const port = 8791;
@@ -65,6 +102,7 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
         DATABASE_URL: url,
         PRICING_MODE: "TIERS",
         CHARGING_MODE: "enforce",
+        PROCURER_URL: await startFulfilmentStub(),
         FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
         FIRM_CHARGE_ASSET: "0xassettest",
         FIRM_CHARGE_NETWORK: "eip155:196"
@@ -168,6 +206,7 @@ suite("gateway express boundary (EXPRESS_ENABLED, CHARGING_MODE=enforce)", () =>
         PORT: String(port),
         DATABASE_URL: url,
         CHARGING_MODE: "enforce",
+        PROCURER_URL: await startFulfilmentStub(),
         EXPRESS_ENABLED: "true",
         EXPRESS_JOB_TYPES: "market_snapshot",
         EXPRESS_PRICE_UNITS: "500000",
@@ -278,6 +317,7 @@ suite("gateway settlement boundary", () => {
         DATABASE_URL: url,
         PRICING_MODE: "TIERS",
         CHARGING_MODE: "enforce",
+        PROCURER_URL: await startFulfilmentStub(),
         FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
         FIRM_CHARGE_ASSET: "0xassettest",
         FIRM_CHARGE_NETWORK: "eip155:196",

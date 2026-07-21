@@ -60,6 +60,7 @@ function loadCandidates() {
 }
 
 const candidates = loadCandidates();
+const compactMode = process.argv.includes("--compact");
 
 line("The Firm — vendor background check");
 line("==================================");
@@ -88,17 +89,19 @@ const mark = {
   UNREACHABLE: " DEAD "
 };
 
-results.forEach((result, index) => {
-  const candidate = candidates[index];
-  const listed = candidate.listedAmount?.amount ?? "?";
-  const live = result.live_amount?.amount ?? "-";
-  const ratio = result.price_ratio !== null && result.price_ratio !== 1 ? `  ${result.price_ratio}x` : "";
-  line(
-    `${mark[result.verdict] ?? "  ?   "} #${String(candidate.agentId).padEnd(5)} ${String(candidate.name)
-      .slice(0, 26)
-      .padEnd(27)} listed ${String(listed).padStart(8)} -> live ${String(live).padStart(8)}${ratio}`
-  );
-});
+if (!compactMode) {
+  results.forEach((result, index) => {
+    const candidate = candidates[index];
+    const listed = candidate.listedAmount?.amount ?? "?";
+    const live = result.live_amount?.amount ?? "-";
+    const ratio = result.price_ratio !== null && result.price_ratio !== 1 ? `  ${result.price_ratio}x` : "";
+    line(
+      `${mark[result.verdict] ?? "  ?   "} #${String(candidate.agentId).padEnd(5)} ${String(candidate.name)
+        .slice(0, 26)
+        .padEnd(27)} listed ${String(listed).padStart(8)} -> live ${String(live).padStart(8)}${ratio}`
+    );
+  });
+}
 
 const hireable = results.filter((result) => result.hireable);
 const dead = results.filter((result) => result.verdict === "UNREACHABLE" || result.verdict === "HTTP_ERROR");
@@ -108,7 +111,7 @@ const overcharging = results
 
 section("What the check found");
 line(`${hireable.length}/${results.length} hireable`);
-line(`${dead.length} dead or misrouted at the endpoint they publish`);
+line(`${dead.length} failed unpaid preflight with unreachable or unusable HTTP responses`);
 line(`${overcharging.length} charging more than their listing says`);
 line(`${Date.now() - started}ms, 0 paid, 0 signatures produced`);
 
@@ -141,14 +144,14 @@ if (worst) {
 section("Why this is the product");
 line("The case against an orchestrator is that a buyer could call these vendors");
 line("directly. Measured, that buyer faces:");
-line(`  - a ${Math.round((dead.length / results.length) * 100)}% chance the endpoint is dead`);
+line(`  - ${Math.round((dead.length / results.length) * 100)}% currently failing unpaid preflight`);
 // Read from what this run measured. Hardcoding "600x" would keep asserting it
 // on camera the day Clawby fixes its listing, which is the exact species of
 // stale claim this whole project refuses to make.
 if (worst) {
   line(`  - listings that understate the real price by up to ${worst.price_ratio}x`);
 }
-line("  - no way to know either without paying to find out");
+line("  - no safe basis to pay without probing the live endpoint first");
 line("");
 line("Someone has to check first, absorb the misses, and carry that risk.");
 line("That is the job.");

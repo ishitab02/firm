@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node scenario.js",
     "background-check": "node background-check.js",
+    "film": "node hackathon.js",
+    "film:paced": "node hackathon.js --paced",
     "start:gateway": "node scenario.js --gateway-url=http://127.0.0.1:8790",
     "start:live": "node scenario.js --live",
     "seed-performance": "node seed-performance.js"

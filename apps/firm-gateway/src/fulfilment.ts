@@ -6,9 +6,12 @@
  *
  *   gateway  CHARGING_MODE=enforce + a live facilitator  -> takes REAL money
  *   procurer REAL_PAYMENTS_ENABLED=false                 -> SIMULATED vendors
+ *   procurer REAL_REFUNDS_ENABLED=false                  -> guarantee cannot close
  *
  * In that state a buyer pays real USDT and receives a deliverable produced by a
- * simulated vendor call. The provenance receipt does disclose it — the tx reads
+ * simulated vendor call. Or, when every candidate fails, the worker reaches a
+ * refund path that cannot return the customer's money automatically. The
+ * provenance receipt does disclose simulated work — the tx reads
  * `SIMULATED:pay:…` and the books line says so — so nothing is hidden. But
  * disclosure is not a defence for selling simulated work; it just means the
  * customer can read what went wrong.
@@ -23,7 +26,11 @@
  * failure direction every other guard in this codebase picks.
  */
 
-export type FulfilmentMode = { realPayments: boolean; walletKeyPresent: boolean };
+export type FulfilmentMode = {
+  realPayments: boolean;
+  realRefunds: boolean;
+  walletKeyPresent: boolean;
+};
 
 /** Ask the procurer what it will actually do with a job. Null when unreachable. */
 export async function readFulfilmentMode(
@@ -38,6 +45,7 @@ export async function readFulfilmentMode(
     const raw = (await response.json()) as Record<string, unknown>;
     return {
       realPayments: raw.real_payments_enabled === true,
+      realRefunds: raw.real_refunds_enabled === true,
       walletKeyPresent: raw.wallet_key_present === true
     };
   } catch {
@@ -79,6 +87,14 @@ export function fulfilmentFailure(input: {
     return (
       "the procurer has real payments enabled but no wallet key, so every vendor call will fail " +
       "and every paid job will refund. Refusing to charge for work that cannot start."
+    );
+  }
+
+  if (!input.mode.realRefunds) {
+    return (
+      "the procurer has real vendor payments enabled but real refunds disabled. A customer could pay " +
+      "for a failed job without receiving the advertised automatic refund. Enable and verify the refund " +
+      "path before accepting paid work."
     );
   }
 

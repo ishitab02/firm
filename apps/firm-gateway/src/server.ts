@@ -535,20 +535,14 @@ if (isPublicBind && chargingMode() === "bypass" && process.env.ALLOW_PUBLIC_BYPA
 // buyer only after their money had already moved.
 if (chargingMode() === "enforce") {
   const procurerUrl = process.env.PROCURER_URL;
-  if (!procurerUrl) {
-    console.warn(
-      "[fulfilment] PROCURER_URL is not set, so the gateway cannot confirm that paid jobs are " +
-        "fulfilled for real. Set it in production."
-    );
-  } else {
-    const mode = await readFulfilmentMode(procurerUrl);
-    const failure = fulfilmentFailure({ charging: true, mode });
-    if (failure) {
-      console.error(`[fulfilment] refusing to start: ${failure}`);
-      process.exit(1);
-    }
-    console.log("[fulfilment] procurer confirmed live: real payments on, wallet key present");
+  const mode = procurerUrl ? await readFulfilmentMode(procurerUrl) : null;
+  const failure = fulfilmentFailure({ charging: true, mode });
+  if (failure) {
+    const configuration = procurerUrl ? "" : "PROCURER_URL is not set; ";
+    console.error(`[fulfilment] refusing to start: ${configuration}${failure}`);
+    process.exit(1);
   }
+  console.log("[fulfilment] procurer confirmed live: real payments and refunds on, wallet key present");
 }
 
 server.listen(port, host, () => {

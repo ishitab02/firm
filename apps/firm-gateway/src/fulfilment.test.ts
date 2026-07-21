@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { fulfilmentFailure } from "./fulfilment.js";
 
-const live = { realPayments: true, walletKeyPresent: true };
+const live = { realPayments: true, realRefunds: true, walletKeyPresent: true };
 
 /**
  * The incoherent pairing: the gateway takes real money while the procurer
@@ -11,7 +11,10 @@ const live = { realPayments: true, walletKeyPresent: true };
  */
 describe("fulfilment coherence", () => {
   it("refuses to charge real money while the procurer simulates", () => {
-    const reason = fulfilmentFailure({ charging: true, mode: { realPayments: false, walletKeyPresent: false } });
+    const reason = fulfilmentFailure({
+      charging: true,
+      mode: { realPayments: false, realRefunds: false, walletKeyPresent: false }
+    });
     expect(reason).toMatch(/SIMULATION mode/);
   });
 
@@ -23,8 +26,19 @@ describe("fulfilment coherence", () => {
   });
 
   it("refuses when real payments are on but no wallet key is loaded", () => {
-    const reason = fulfilmentFailure({ charging: true, mode: { realPayments: true, walletKeyPresent: false } });
+    const reason = fulfilmentFailure({
+      charging: true,
+      mode: { realPayments: true, realRefunds: true, walletKeyPresent: false }
+    });
     expect(reason).toMatch(/no wallet key/);
+  });
+
+  it("refuses paid work while the automatic refund path is disabled", () => {
+    const reason = fulfilmentFailure({
+      charging: true,
+      mode: { realPayments: true, realRefunds: false, walletKeyPresent: true }
+    });
+    expect(reason).toMatch(/real refunds disabled/);
   });
 
   it("allows the coherent live pairing", () => {
@@ -35,6 +49,11 @@ describe("fulfilment coherence", () => {
   // a simulating procurer is exactly right and must not block startup.
   it("does not constrain a gateway that is not charging", () => {
     expect(fulfilmentFailure({ charging: false, mode: null })).toBe(null);
-    expect(fulfilmentFailure({ charging: false, mode: { realPayments: false, walletKeyPresent: false } })).toBe(null);
+    expect(
+      fulfilmentFailure({
+        charging: false,
+        mode: { realPayments: false, realRefunds: false, walletKeyPresent: false }
+      })
+    ).toBe(null);
   });
 });

@@ -62,9 +62,12 @@ w("**Nothing was signed and nothing was spent.** No agent was charged, and no");
 w("payment authorization was produced at any point. Reading a 402 is free — that");
 w("is what makes this measurable at all.");
 w("");
-w(`- Population: of **${scan.agents.length}** agents on the marketplace, **${n}** publish an`);
+w(`- Population: of **${scan.agents.length}** agents in our ten-query marketplace search snapshot, **${n}** publish an`);
 w("  A2MCP service with an HTTP endpoint. The rest are A2A-only or list no");
-w("  service, and cannot be probed over HTTP by anyone.");
+w("  service in that snapshot.");
+w("- Request body: the service's documented literal example when one can be parsed;");
+w("  otherwise `{}`. An HTTP error can therefore mean missing or undocumented");
+w("  arguments/method semantics, not necessarily dead infrastructure.");
 w("- Up to 2 attempts, retrying only on network-level failure. A cold-starting");
 w("  container is not a dead one, and one timeout is not evidence.");
 w(`- Timeout: ${health.method?.timeout_ms ?? 12000}ms.`);
@@ -89,16 +92,17 @@ w("| | count | share |");
 w("|---|---:|---:|");
 w(`| Probed | ${n} | 100% |`);
 w(`| Reachable and x402-conformant | ${conformant.length} | ${pct(conformant.length)}% |`);
-w(`| Served without charging | ${free.length} | ${pct(free.length)}% |`);
+w(`| Returned 200 without an x402 challenge | ${free.length} | ${pct(free.length)}% |`);
 w(`| **Dead or misrouted** | **${dead.length}** | **${pct(dead.length)}%** |`);
 w("");
-w(`**${pct(dead.length)}% of agents that publish an endpoint do not answer on it.**`);
-w(`${httpError.length} return an HTTP error at the address they advertise —`);
-w(`mostly 404, meaning the listing points somewhere real that serves nothing.`);
-w(`${unreachable.length} do not resolve or refuse the connection outright.`);
+w(`**${dead.length} of ${n} (${pct(dead.length)}%) failed this unpaid preflight.**`);
+w(`${httpError.length} answered with an HTTP status other than a usable 200 or conformant 402.`);
+w(`That set includes missing-route responses as well as responses that may require`);
+w(`arguments or method semantics absent from the listing. ${unreachable.length} did not resolve,`);
+w(`refused the connection, or timed out after the configured retries.`);
 w("");
-w("A buyer who trusts the marketplace listing and calls the endpoint has roughly");
-w("a coin-flip chance of reaching anything at all.");
+w("For a buyer using only the public listing metadata, roughly two in five agents");
+w("could not be classified as callable by this preflight.");
 w("");
 w("---");
 w("");
@@ -130,14 +134,16 @@ if (underListing.length) {
   w("");
 }
 if (freeDespitePrice.length) {
-  w(`And ${freeDespitePrice.length} agents advertise a price but serve for free — they answer 200 with`);
-  w("the goods and never issue a challenge at all:");
+  w(`And ${freeDespitePrice.length} agents advertise a nonzero price but answer 200 without issuing`);
+  w("an x402 challenge:");
   w("");
   for (const r of freeDespitePrice) {
-    w(`- #${r.agent_id} ${r.name} — listed ${usdt(r.listed_amount.amount)}, charges nothing`);
+    w(`- #${r.agent_id} ${r.name} — listed ${usdt(r.listed_amount.amount)}, returned 200 without a challenge`);
   }
   w("");
-  w("Those are services being given away by accident. Presumably nobody has told them.");
+  w("The probe does not judge whether those 200 bodies contain a useful deliverable.");
+  w("They may be free despite the listing, or they may be non-billable/error responses;");
+  w("a paid semantic check would be required to distinguish the two.");
   w("");
 }
 w("---");
@@ -199,8 +205,8 @@ const mark = {
   PRICE_MISMATCH: "over",
   OVER_BUDGET: "over",
   UNSUPPORTED_CHALLENGE: "n/a",
-  HTTP_ERROR: "**dead**",
-  UNREACHABLE: "**dead**"
+  HTTP_ERROR: "**failed**",
+  UNREACHABLE: "**failed**"
 };
 for (const r of results) {
   const listed = r.listed_amount ? usdt(r.listed_amount.amount) : "—";

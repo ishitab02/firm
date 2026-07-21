@@ -10,6 +10,7 @@ import {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const liveMode = process.argv.includes("--live");
+const compactMode = process.argv.includes("--compact");
 const gatewayArg = process.argv.find((arg) => arg.startsWith("--gateway-url="));
 const gatewayUrl = gatewayArg?.split("=")[1];
 
@@ -31,8 +32,10 @@ function receipt() {
   const userPrice = usdt(600000);
   const flakyCost = vendors.vendor_flaky.services.find((service) => service.tool === "launch_brief").price;
   const goodCost = vendors.vendor_good.services.find((service) => service.tool === "launch_brief").price;
-  const booksCost = usdt(50000);
-  const actualVendorCosts = usdt(Number(flakyCost.amount) + Number(goodCost.amount) + Number(booksCost.amount));
+  // Treasury books is disclosed below but not called in fixture mode. It is
+  // therefore neither a vendor cost nor a paid intra-team cost.
+  const booksCost = usdt(0);
+  const actualVendorCosts = usdt(Number(flakyCost.amount) + Number(goodCost.amount));
   const absorbed = Number(actualVendorCosts.amount) - Number(userPrice.amount);
 
   return {
@@ -81,8 +84,8 @@ function receipt() {
     books: {
       by: "Treasury Copilot (our own product, intra-team payment, disclosed)",
       cost: booksCost,
-      tx: "SIMULATED:treasury-books",
-      statement: "SIMULATED fixture-mode books statement"
+      tx: "SIMULATED:NO_BOOKS_PAYMENT",
+      statement: "SIMULATED fixture-mode books disclosure; no books payment was made"
     },
     guarantee_status: "delivered",
     generated_at: "2026-07-18T12:30:00Z"
@@ -198,6 +201,22 @@ if (gatewayUrl) {
   line(`7. Validation passed: ${goodValidation.checks_run.join(", ")}`);
   line(`8. Delivered: ${goodResult.checklist.join(" ")}`);
   line("");
-  line("Profit and Provenance Receipt");
-  line(JSON.stringify(provenance, null, 2));
+  if (compactMode) {
+    line("SIMULATED receipt summary");
+    line(`  customer price: ${money(provenance.economics.user_price)}`);
+    line(`  vendor costs:  ${money(provenance.economics.actual_vendor_costs)}`);
+    line(
+      `  Firm margin:   ${provenance.economics.margin_retained_or_absorbed.sign} ${money({
+        ...provenance.economics.margin_retained_or_absorbed,
+        decimals: 6,
+        token: "USDT"
+      })}`
+    );
+    line(`  books:         SIMULATED disclosure, ${money(provenance.books.cost)}, no payment`);
+    line(`  guarantee:    ${provenance.guarantee_status}`);
+    line("  tx evidence:  SIMULATED fixture references only");
+  } else {
+    line("Profit and Provenance Receipt");
+    line(JSON.stringify(provenance, null, 2));
+  }
 }
