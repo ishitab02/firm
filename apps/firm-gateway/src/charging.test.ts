@@ -9,6 +9,7 @@ import {
   encodeSettlement,
   paymentHeaderFrom,
   sellerConfigFromEnv,
+  settlePayment,
   verifyPayment
 } from "./charging.js";
 
@@ -24,12 +25,18 @@ const spec = {
 
 const servers: http.Server[] = [];
 
+/**
+ * Records the path as well as the body, because verify and settle are distinct
+ * operations against distinct routes and a fake that answers both identically
+ * would hide the difference — which is exactly how "we never settle" survived
+ * a green test suite.
+ */
 async function startFacilitator(status: number, body: unknown) {
-  const seen: unknown[] = [];
+  const seen: Array<{ path: string; body: unknown }> = [];
   const server = http.createServer(async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
-    seen.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    seen.push({ path: req.url ?? "", body: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   });
@@ -89,19 +96,23 @@ describe("verifyPayment", () => {
     expect(result).toMatchObject({ ok: false, reason: /not configured/ });
   });
 
-  it("accepts a payment the facilitator validates and carries the tx through", async () => {
-    const { url, seen } = await startFacilitator(200, {
-      isValid: true,
-      payer: "0xbuyer",
-      transaction: "0xsettled",
-      amount: "4800000"
-    });
+  // Verification answers "is this signature valid for these requirements". It
+  // does not broadcast anything, so a real facilitator has no transaction to
+  // report here. The fixture used to return `transaction: "0xsettled"`, which
+  // made this test look like proof that payment had settled when nothing in the
+  // gateway had settled anything.
+  it("accepts a payment the facilitator validates, and hits /verify to do it", async () => {
+    const { url, seen } = await startFacilitator(200, { isValid: true, payer: "0xbuyer", amount: "4800000" });
 
     const requirements = buildRequirements(spec);
     const result = await verifyPayment("payment-header", requirements, { facilitatorUrl: url });
 
-    expect(result).toMatchObject({ ok: true, payer: "0xbuyer", transaction: "0xsettled" });
-    expect(seen[0]).toMatchObject({ paymentHeader: "payment-header", paymentRequirements: requirements.accepts[0] });
+    expect(result).toMatchObject({ ok: true, payer: "0xbuyer" });
+    expect(seen[0].path).toBe("/verify");
+    expect(seen[0].body).toMatchObject({
+      paymentHeader: "payment-header",
+      paymentRequirements: requirements.accepts[0]
+    });
   });
 
   it("rejects when the facilitator says the payment is invalid", async () => {
@@ -119,6 +130,60 @@ describe("verifyPayment", () => {
   it("rejects when the facilitator is unreachable", async () => {
     const result = await verifyPayment("h", buildRequirements(spec), { facilitatorUrl: "http://127.0.0.1:1" });
     expect(result).toMatchObject({ ok: false, reason: /verification failed/ });
+  });
+});
+
+/**
+ * Settlement is the step that actually redeems the buyer's authorization. The
+ * gateway used to stop after verification, which meant every paid call was
+ * served for free while the response header claimed a successful payment.
+ */
+describe("settlePayment", () => {
+  it("settles against /settle and returns the transaction", async () => {
+    const { url, seen } = await startFacilitator(200, {
+      success: true,
+      transaction: "0xsettled",
+      payer: "0xbuyer",
+      amount: "4800000"
+    });
+
+    const requirements = buildRequirements(spec);
+    const result = await settlePayment("payment-header", requirements, { facilitatorUrl: url });
+
+    expect(result).toMatchObject({ ok: true, transaction: "0xsettled", payer: "0xbuyer" });
+    expect(seen[0].path).toBe("/settle");
+  });
+
+  // "Settled, but we cannot tell you the transaction" is indistinguishable from
+  // "not settled", and the PAYMENT-RESPONSE header would be asserting a payment
+  // we have no evidence for.
+  it("refuses to report success without a transaction reference", async () => {
+    const { url } = await startFacilitator(200, { success: true, payer: "0xbuyer" });
+    const result = await settlePayment("h", buildRequirements(spec), { facilitatorUrl: url });
+    expect(result).toMatchObject({ ok: false, reason: /without a transaction reference/ });
+  });
+
+  it("fails closed when the facilitator declines to settle", async () => {
+    const { url } = await startFacilitator(200, { success: false, errorReason: "authorization_expired" });
+    const result = await settlePayment("h", buildRequirements(spec), { facilitatorUrl: url });
+    expect(result).toMatchObject({ ok: false, reason: "authorization_expired" });
+  });
+
+  it("fails closed when no facilitator is configured, rather than assuming settlement", async () => {
+    const result = await settlePayment("h", buildRequirements(spec), {});
+    expect(result).toMatchObject({ ok: false, reason: /not configured/ });
+  });
+
+  it("fails closed when the facilitator errors or is unreachable", async () => {
+    const { url } = await startFacilitator(500, { error: "boom" });
+    expect(await settlePayment("h", buildRequirements(spec), { facilitatorUrl: url })).toMatchObject({
+      ok: false,
+      reason: /HTTP 500/
+    });
+    expect(await settlePayment("h", buildRequirements(spec), { facilitatorUrl: "http://127.0.0.1:1" })).toMatchObject({
+      ok: false,
+      reason: /settlement failed/
+    });
   });
 });
 

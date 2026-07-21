@@ -9,8 +9,9 @@ import {
   encodeSettlement,
   paymentHeaderFrom,
   sellerConfigFromEnv,
-  verifyPayment,
-  VerifyResult
+  settlePayment,
+  SettleResult,
+  verifyPayment
 } from "./charging.js";
 import { ensureGatewayTables, pool } from "./db.js";
 import { mcpDispatch } from "./mcp.js";
@@ -318,7 +319,7 @@ async function chargeGate(
   headers: Record<string, string | string[] | undefined>
 ): Promise<
   | { status: number; body: unknown; headers?: Record<string, string> }
-  | { settled: VerifyResult | null; quote?: StoredQuote }
+  | { settled: SettleResult | null; quote?: StoredQuote }
 > {
   if (!PAID_TOOLS.has(name)) return { settled: null };
 
@@ -392,7 +393,7 @@ async function sellerCharge(opts: {
   decimals: number;
   resource: string;
   headers: Record<string, string | string[] | undefined>;
-}): Promise<{ status: number; body: unknown; headers?: Record<string, string> } | { verified: VerifyResult }> {
+}): Promise<{ status: number; body: unknown; headers?: Record<string, string> } | { verified: SettleResult }> {
   let seller;
   try {
     seller = sellerConfigFromEnv();
@@ -413,20 +414,35 @@ async function sellerCharge(opts: {
     description: `The Firm — ${opts.name}`
   });
 
-  const verification = await verifyPayment(paymentHeaderFrom(opts.headers), requirements, {
-    facilitatorUrl: seller.facilitatorUrl
-  });
-
-  if (!verification.ok) {
-    console.warn(`[charging] rejected unpaid ${opts.name}: ${verification.reason}`);
+  const header = paymentHeaderFrom(opts.headers);
+  const requirePayment = (reason: string) => {
+    console.warn(`[charging] rejected unpaid ${opts.name}: ${reason}`);
     return {
       status: 402,
       headers: { "PAYMENT-REQUIRED": encodeRequirements(requirements) },
-      body: { error: { code: "PAYMENT_REQUIRED", detail: verification.reason }, ...requirements }
+      body: { error: { code: "PAYMENT_REQUIRED", detail: reason }, ...requirements }
     };
+  };
+
+  const verification = await verifyPayment(header, requirements, { facilitatorUrl: seller.facilitatorUrl });
+  if (!verification.ok) return requirePayment(verification.reason);
+
+  // Verification proves the signature. Settlement is what redeems it, and it
+  // runs before a single vendor is hired, because hiring spends the Firm's own
+  // money — see the comment on settlePayment.
+  const settlement = await settlePayment(header, requirements, { facilitatorUrl: seller.facilitatorUrl });
+  if (!settlement.ok) return requirePayment(`payment verified but did not settle: ${settlement.reason}`);
+
+  // We are now holding the buyer's money, so we must know where to send it back
+  // if we fail to deliver. Neither step reporting a payer means we cannot honour
+  // the refund guarantee, and the fallback is a placeholder address — i.e. a
+  // stranger. Refusing the job is the only honest option left.
+  const payer = settlement.payer ?? verification.payer;
+  if (!payer) {
+    return requirePayment("settled without a payer address; refusing a job we could not refund");
   }
 
-  return { verified: verification };
+  return { verified: { ...settlement, payer } };
 }
 
 await ensureGatewayTables();

@@ -10,7 +10,9 @@
  *   GATEWAY_TEST_DATABASE_URL=postgresql://firm:firm@127.0.0.1:5433/firm pnpm -F @firm/gateway test
  */
 
+import http from "node:http";
 import { spawn, ChildProcess } from "node:child_process";
+import { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import pg from "pg";
@@ -210,5 +212,147 @@ suite("gateway express boundary (EXPRESS_ENABLED, CHARGING_MODE=enforce)", () =>
     const { status, body } = await callExpress("express_run", { job_type: "not_a_type", params: {} });
     expect(status).toBe(200);
     expect(body.error.code).toBe("UNKNOWN_JOB_TYPE");
+  });
+});
+
+/**
+ * The settlement boundary, against a facilitator we control.
+ *
+ * The defect this pins: the gateway used to accept a payment on verification
+ * alone. Verification only says the signature is valid — it broadcasts nothing.
+ * A gateway that stops there hands over the goods while the buyer's
+ * authorization quietly expires unredeemed, and answers with a PAYMENT-RESPONSE
+ * claiming success.
+ *
+ * These tests fail if that regresses, because a facilitator that verifies and
+ * then declines to settle must produce no job row.
+ */
+suite("gateway settlement boundary", () => {
+  let settleChild: ChildProcess | undefined;
+  let settleBase = "";
+  let facilitator: http.Server;
+  let settleDb: pg.Pool;
+  /** Flipped per test to decide what /settle answers. */
+  let settleBehaviour: "success" | "declined" | "no_transaction" | "no_payer" = "success";
+  let paths: string[] = [];
+
+  beforeAll(async () => {
+    facilitator = http.createServer(async (req, res) => {
+      for await (const _chunk of req) {
+        // drain
+      }
+      paths.push(req.url ?? "");
+      res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/verify") {
+        res.end(JSON.stringify({ isValid: true, payer: "0xbuyer", amount: "500000" }));
+        return;
+      }
+      if (settleBehaviour === "declined") {
+        res.end(JSON.stringify({ success: false, errorReason: "authorization_expired" }));
+        return;
+      }
+      if (settleBehaviour === "no_transaction") {
+        res.end(JSON.stringify({ success: true, payer: "0xbuyer" }));
+        return;
+      }
+      res.end(
+        JSON.stringify({
+          success: true,
+          transaction: "0xsettledtx",
+          payer: settleBehaviour === "no_payer" ? undefined : "0xbuyer",
+          amount: "500000"
+        })
+      );
+    });
+    await new Promise<void>((resolve) => facilitator.listen(0, "127.0.0.1", resolve));
+    const facilitatorPort = (facilitator.address() as AddressInfo).port;
+
+    const port = 8795;
+    settleBase = `http://127.0.0.1:${port}`;
+    settleDb = new pg.Pool({ connectionString: url });
+    settleChild = spawn(path.join(packageRoot, "node_modules/.bin/tsx"), ["src/server.ts"], {
+      cwd: packageRoot,
+      env: {
+        ...process.env,
+        PORT: String(port),
+        DATABASE_URL: url,
+        PRICING_MODE: "TIERS",
+        CHARGING_MODE: "enforce",
+        FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
+        FIRM_CHARGE_ASSET: "0xassettest",
+        FIRM_CHARGE_NETWORK: "eip155:196",
+        X402_FACILITATOR_URL: `http://127.0.0.1:${facilitatorPort}`
+      },
+      stdio: "ignore"
+    });
+    await waitForHealth(settleBase);
+  }, 40_000);
+
+  afterAll(async () => {
+    settleChild?.kill();
+    await new Promise((resolve) => facilitator.close(resolve));
+    await settleDb?.end();
+  });
+
+  async function quoteThenExecute(goal: string) {
+    const quoteResponse = await fetch(settleBase, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tool: "get_quote",
+        args: { goal, budget_cap: { amount: "5000000", decimals: 6, token: "USDT" }, constraints: {} }
+      })
+    });
+    const quote = (await quoteResponse.json()) as any;
+    paths = [];
+    const response = await fetch(settleBase, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "PAYMENT-SIGNATURE": Buffer.from(JSON.stringify({ authorization: "valid" })).toString("base64")
+      },
+      body: JSON.stringify({ tool: "execute", args: { quote_id: quote.quote_id } })
+    });
+    return { quoteId: quote.quote_id as string, status: response.status, headers: response.headers, body: await response.json() };
+  }
+
+  it("settles before creating the job, and reports the settlement transaction", async () => {
+    settleBehaviour = "success";
+    const result = await quoteThenExecute("settled market snapshot");
+
+    expect(result.status).toBe(200);
+    expect(result.body.task_id).toMatch(/^t_/);
+    expect(paths).toEqual(["/verify", "/settle"]);
+
+    const settlement = JSON.parse(
+      Buffer.from(result.headers.get("payment-response") as string, "base64").toString("utf8")
+    );
+    expect(settlement.transaction).toBe("0xsettledtx");
+
+    const rows = await settleDb.query("SELECT quote->>'buyer_address' AS buyer FROM firm_jobs WHERE quote_id = $1", [
+      result.quoteId
+    ]);
+    expect(rows.rows[0].buyer).toBe("0xbuyer");
+  });
+
+  it("writes no job when the payment verifies but does not settle", async () => {
+    settleBehaviour = "declined";
+    const result = await quoteThenExecute("unsettled market snapshot");
+
+    expect(result.status).toBe(402);
+    expect(result.body.error.detail).toMatch(/did not settle/);
+    expect(paths).toEqual(["/verify", "/settle"]);
+
+    const rows = await settleDb.query("SELECT count(*)::int AS n FROM firm_jobs WHERE quote_id = $1", [result.quoteId]);
+    expect(rows.rows[0].n).toBe(0);
+  });
+
+  it("writes no job when settlement reports success without a transaction", async () => {
+    settleBehaviour = "no_transaction";
+    const result = await quoteThenExecute("evidence-free market snapshot");
+
+    expect(result.status).toBe(402);
+    const rows = await settleDb.query("SELECT count(*)::int AS n FROM firm_jobs WHERE quote_id = $1", [result.quoteId]);
+    expect(rows.rows[0].n).toBe(0);
   });
 });

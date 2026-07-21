@@ -136,6 +136,84 @@ export async function verifyPayment(
   }
 }
 
+export type SettleResult =
+  | { ok: true; transaction: string; payer?: string; amount?: string; raw: Record<string, unknown> }
+  | { ok: false; reason: string };
+
+/**
+ * Redeem a verified authorization. This is the step that actually moves money.
+ *
+ * `verify` only answers "is this signature cryptographically valid for these
+ * requirements". It does not broadcast anything, so a gateway that stops after
+ * verifying has served a paid request for free — the buyer's authorization sits
+ * unredeemed and expires. Settlement is what submits it.
+ *
+ * The Firm has a sharper reason than most sellers to settle BEFORE fulfilling:
+ * fulfilling costs us real money, because we pay vendors out of our own wallet.
+ * Verifying, spending on vendors, and only then discovering that settlement
+ * fails would mean absorbing the whole job for a buyer who never paid.
+ *
+ * Fails closed, and specifically refuses to report success without a
+ * transaction reference: "settled, no idea what the tx was" is indistinguishable
+ * from "not settled", and the receipt would be asserting a payment we cannot
+ * evidence.
+ *
+ * TODO(unverified): the facilitator's settle route and body shape are not
+ * confirmed against the real OKX facilitator — only against the local fake.
+ * X402_FACILITATOR_URL gates the whole path; recorded in docs/status/F2.md.
+ */
+export async function settlePayment(
+  headerValue: string | undefined,
+  requirements: PaymentRequirements,
+  options: { facilitatorUrl?: string; timeoutMs?: number } = {}
+): Promise<SettleResult> {
+  if (!headerValue) return { ok: false, reason: "no payment header to settle" };
+  if (!options.facilitatorUrl) {
+    return {
+      ok: false,
+      reason: "X402_FACILITATOR_URL is not configured; cannot settle a payment and will not assume one"
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
+  try {
+    const response = await fetch(new URL("/settle", options.facilitatorUrl).toString(), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] }),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      return { ok: false, reason: `facilitator settle returned HTTP ${response.status}` };
+    }
+    const raw = (await response.json()) as Record<string, unknown>;
+    const settled = raw.success === true || raw.status === "success" || raw.settled === true;
+    if (!settled) {
+      const reason = raw.errorReason ?? raw.invalidReason ?? raw.reason ?? raw.error ?? "facilitator did not settle";
+      return { ok: false, reason: String(reason) };
+    }
+
+    const transaction = raw.transaction ?? raw.txHash ?? raw.tx_hash;
+    if (typeof transaction !== "string" || transaction.length === 0) {
+      return { ok: false, reason: "facilitator reported settlement without a transaction reference" };
+    }
+
+    return {
+      ok: true,
+      transaction,
+      payer: typeof raw.payer === "string" ? raw.payer : undefined,
+      amount: typeof raw.amount === "string" ? raw.amount : undefined,
+      raw
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `facilitator settlement failed: ${detail}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Read the buyer's payment header under either the v2 or the legacy v1 name. */
 export function paymentHeaderFrom(headers: Record<string, string | string[] | undefined>): string | undefined {
   const value = headers["payment-signature"] ?? headers["x-payment"];
@@ -143,12 +221,20 @@ export function paymentHeaderFrom(headers: Record<string, string | string[] | un
   return value;
 }
 
-/** Encode a settlement result for the `PAYMENT-RESPONSE` response header. */
-export function encodeSettlement(result: Extract<VerifyResult, { ok: true }>): string {
+/**
+ * Encode a settlement result for the `PAYMENT-RESPONSE` response header.
+ *
+ * Takes a settlement, not a verification. The previous version took a verify
+ * result and emitted `status: "success"` with whatever transaction field the
+ * verify response happened to carry — usually none, because verification does
+ * not produce a transaction. That header asserted a settled payment that had
+ * not settled.
+ */
+export function encodeSettlement(result: Extract<SettleResult, { ok: true }>): string {
   return Buffer.from(
     JSON.stringify({
       status: "success",
-      transaction: result.transaction ?? "",
+      transaction: result.transaction,
       payer: result.payer ?? "",
       amount: result.amount ?? ""
     }),
