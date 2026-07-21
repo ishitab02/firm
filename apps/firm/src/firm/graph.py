@@ -306,7 +306,15 @@ def build_provenance(
     # three published numbers reconcile exactly:
     #     user_price = actual_vendor_costs + books.cost + margin_retained
     vendor_costs = _sum_money([hire.cost for hire in state.get("hires", [])])
-    books_cost = Money.usdt(50_000)
+
+    # The books line is disclosed either way, but only counts as an incurred
+    # cost when the Treasury call actually happens. Subtracting a simulated
+    # 50,000 from our own margin understated what we retained — dishonest in the
+    # generous direction, which is still dishonest, and on the very receipt this
+    # entry asks judges to trust. While ENABLE_TREASURY_BOOKS is off the cost is
+    # zero and the statement says so.
+    books_enabled = get_settings().enable_treasury_books
+    books_cost = Money.usdt(50_000) if books_enabled else Money.usdt(0)
     total_outlay = vendor_costs.units() + books_cost.units()
     margin = task.quote.price.units() - total_outlay
     return ProvenanceReceipt(
@@ -327,8 +335,15 @@ def build_provenance(
         ),
         books=BooksReceipt(
             cost=books_cost,
-            tx="SIMULATED:treasury-books",
-            statement="SIMULATED books statement until live Treasury call is human-enabled",
+            tx="SIMULATED:treasury-books" if not books_enabled else "PENDING",
+            statement=(
+                "Books by our own Treasury Copilot, disclosed as an intra-team payment."
+                if books_enabled
+                else (
+                    "SIMULATED: no Treasury call was made and NO COST WAS INCURRED, so this "
+                    "line is 0 and the margin above reflects what The Firm actually retained."
+                )
+            ),
         ),
         guarantee_status=guarantee_status,  # type: ignore[arg-type]
     )

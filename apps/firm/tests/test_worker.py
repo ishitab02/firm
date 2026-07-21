@@ -283,6 +283,7 @@ def test_provenance_economics_reconcile_exactly():
     price = int(receipt.economics.user_price.amount)
 
     assert vendors == 15, "vendor costs must be vendor money only, not ours"
+    assert books == 0, "a simulated books call costs nothing and must not reduce our stated margin"
     assert receipt.economics.margin_retained_or_absorbed["sign"] == "retained"
     assert vendors + books + margin == price, "the published numbers must reconcile"
 

@@ -1,0 +1,225 @@
+{
+  "generated_at": "2026-07-21T13:11:16.914Z",
+  "provenance": {
+    "purpose": "Demo vendor pool, locked from OBSERVED reliability rather than listings (PLAN D4).",
+    "method": "see data/vendor-reliability-2026-07-21.json — unpaid 402 probes, zero cost",
+    "included": "reachable + x402-conformant + live price matches or undercuts the listing",
+    "excluded": {
+      "2012": "HTTP 404 at its listed endpoint",
+      "2143": "HTTP 404 at its listed endpoint",
+      "3209": "listed 5000 units, live 402 demands 3000000 — 600x mismatch",
+      "5175": "unreachable",
+      "6560": "no response within 12s"
+    },
+    "prices": "taken from each vendor live 402, NOT from the marketplace listing, because 2 of 6 listings were wrong"
+  },
+  "vendors": [
+    {
+      "agent_id": "2023",
+      "name": "Onchain Data Explorer",
+      "endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_address_balance_history",
+      "chain_index": 196,
+      "communication_address": "0x0F1375cF76E56dFD559830183C8ed4EeAE7e7682",
+      "services": [
+        {
+          "tool": "Address Balance Snapshot",
+          "service_id": "17305",
+          "service_type": "A2MCP",
+          "endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_address_balance_history",
+          "price": {
+            "amount": "15",
+            "decimals": 6,
+            "token": "USDT"
+          },
+          "price_unresolved_reason": null,
+          "fee_amount_declared": 0.000015,
+          "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+          "capability": "market_snapshot",
+          "capability_source": "inferred_from_service_name_and_description",
+          "description": "Address balance at a block — POST.\nPOST only (GET=405). Requires chainIndex, address, height. Returns the balance at that block height.\ne.g. POST {\"chainIndex\":\"1\",\"address\":\"0x...\",\"height\":\"21000000\"}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1",
+              "address": "0x...",
+              "height": "21000000"
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          },
+          "price_source": "observed_in_live_402_probe_2026-07-21"
+        }
+      ],
+      "services_dropped": 30,
+      "kya_base_score": 93,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "marketplace_feedback_rate": 92.86,
+      "marketplace_security_rate": 4.86,
+      "sold_count": 1572,
+      "categories": [
+        "Software services"
+      ],
+      "flags": [],
+      "flags_source": "derived_by_tools/vendor-index/generate.js",
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
+    },
+    {
+      "agent_id": "2013",
+      "name": "CoinAnk OpenAPI",
+      "endpoint": "https://open-api.coinank.com/api/etf/getUsBtcEtf",
+      "chain_index": 196,
+      "communication_address": "0xF4ed162f1c26930AD75B349DEdbD6746313C16ED",
+      "services": [
+        {
+          "tool": "US BTC ETF",
+          "service_id": "2346",
+          "service_type": "A2MCP",
+          "endpoint": "https://open-api.coinank.com/api/etf/getUsBtcEtf",
+          "price": {
+            "amount": "1000",
+            "decimals": 6,
+            "token": "USDT"
+          },
+          "price_unresolved_reason": null,
+          "fee_amount_declared": 0.01,
+          "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+          "capability": "market_snapshot",
+          "capability_source": "inferred_from_service_name_and_description",
+          "description": "summary: US BTC ETF data.\nfeature list:\n- Query CoinAnk market API\n- Return structured JSON\n- Support crypto analysis\nexample prompts:\n- Get US BTC ETF data",
+          "documented_example_args": null,
+          "price_source": "observed_in_live_402_probe_2026-07-21"
+        }
+      ],
+      "services_dropped": 0,
+      "kya_base_score": 100,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "marketplace_feedback_rate": 100,
+      "marketplace_security_rate": 5,
+      "sold_count": 1520,
+      "categories": [
+        "Software services"
+      ],
+      "flags": [],
+      "flags_source": "derived_by_tools/vendor-index/generate.js",
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
+    },
+    {
+      "agent_id": "2135",
+      "name": "Newsliquid",
+      "endpoint": "https://x402.6551.io/okx/news_type",
+      "chain_index": 196,
+      "communication_address": "0x6cf2df591a4786337549131A71b10790e9306235",
+      "services": [
+        {
+          "tool": "OpenNews News Type",
+          "service_id": "25926",
+          "service_type": "A2MCP",
+          "endpoint": "https://x402.6551.io/okx/news_type",
+          "price": {
+            "amount": "2000",
+            "decimals": 6,
+            "token": "USDT"
+          },
+          "price_unresolved_reason": null,
+          "fee_amount_declared": 0.002,
+          "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+          "capability": "market_snapshot",
+          "capability_source": "inferred_from_service_name_and_description",
+          "description": "1. Returns the available OpenNews source and category tree for search filtering.\n2. User must provide POST/GET parameters: no required fields.",
+          "documented_example_args": null,
+          "price_source": "observed_in_live_402_probe_2026-07-21"
+        }
+      ],
+      "services_dropped": 2,
+      "kya_base_score": 100,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "marketplace_feedback_rate": 100,
+      "marketplace_security_rate": 5,
+      "sold_count": 410,
+      "categories": [
+        "Software services"
+      ],
+      "flags": [],
+      "flags_source": "derived_by_tools/vendor-index/generate.js",
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
+    },
+    {
+      "agent_id": "5524",
+      "name": "API2ASP Factory",
+      "endpoint": "https://api2asp-factory.vercel.app/api/v1/analyze-openapi",
+      "chain_index": 196,
+      "communication_address": "0xb70162C96fF0492e48A8e5cae761C3F19CEeB639",
+      "services": [
+        {
+          "tool": "OpenAPI ASP Analysis",
+          "service_id": "33511",
+          "service_type": "A2MCP",
+          "endpoint": "https://api2asp-factory.vercel.app/api/v1/analyze-openapi",
+          "price": {
+            "amount": "10000",
+            "decimals": 6,
+            "token": "USDT"
+          },
+          "price_unresolved_reason": null,
+          "fee_amount_declared": 0.01,
+          "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+          "capability": "market_snapshot",
+          "capability_source": "inferred_from_service_name_and_description",
+          "description": "Analyzes authorized OpenAPI bundles for agent-service readiness, operation safety, ambiguity blockers, and evidence digests.\nUser provides an OpenAPI 3.0/3.1 JSON bundle and confirms they are authorized to transform it.",
+          "documented_example_args": null,
+          "price_source": "observed_in_live_402_probe_2026-07-21"
+        }
+      ],
+      "services_dropped": 0,
+      "kya_base_score": 100,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "marketplace_feedback_rate": 100,
+      "marketplace_security_rate": 5,
+      "sold_count": 12,
+      "categories": [
+        "Software services"
+      ],
+      "flags": [],
+      "flags_source": "derived_by_tools/vendor-index/generate.js",
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
+    },
+    {
+      "agent_id": "5557",
+      "name": "Pitchook",
+      "endpoint": "https://pitchook.xyz/v1/x402/execute",
+      "chain_index": 196,
+      "communication_address": "0x83817B95791D6BAe83F188847215bd5d3Cf3e8c9",
+      "services": [
+        {
+          "tool": "Bring-Your-Own-Key API Call",
+          "service_id": "33636",
+          "service_type": "A2MCP",
+          "endpoint": "https://pitchook.xyz/v1/x402/execute",
+          "price": {
+            "amount": "20000",
+            "decimals": 6,
+            "token": "USDT"
+          },
+          "price_unresolved_reason": null,
+          "fee_amount_declared": 0.02,
+          "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+          "capability": "market_snapshot",
+          "capability_source": "inferred_from_service_name_and_description",
+          "description": "Executes any of 35+ tools -- code hosting, email, chat, docs, web search, data -- through one gateway with routing, retries, and logging; for agents holding their own provider API keys.\n1. tool (qualified name) 2. params (per tool schema) 3. credentials with the tool's required fields (api_key for search; listed per tool in the free catalog); no key? use Managed Agent Task Execution",
+          "documented_example_args": null,
+          "price_source": "observed_in_live_402_probe_2026-07-21"
+        }
+      ],
+      "services_dropped": 1,
+      "kya_base_score": 100,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "marketplace_feedback_rate": 100,
+      "marketplace_security_rate": 5,
+      "sold_count": 1,
+      "categories": [
+        "Software services"
+      ],
+      "flags": [],
+      "flags_source": "derived_by_tools/vendor-index/generate.js",
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
+    }
+  ]
+}
