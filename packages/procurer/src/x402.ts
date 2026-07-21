@@ -136,7 +136,24 @@ function priceUnits(entry: AcceptsEntry): number {
       `accepts entry has no base-unit integer price (amount/maxAmountRequired), got ${JSON.stringify(raw)}`
     );
   }
-  return Number(raw);
+
+  // Every cap comparison downstream is a JS number. Past 2^53-1 those stop
+  // being exact, so `Number(raw)` would quietly hand the caps a value that is
+  // not the amount the vendor asked for — and the signature covers the vendor's
+  // original string, not our rounded copy.
+  //
+  // At 6 decimals this is unreachable (9e9 USDT). At 18 it is 0.009 tokens, so
+  // it stops being theoretical the moment anyone adds an 18-decimal asset.
+  // Refusing costs nothing today and removes the class; converting the whole
+  // money path to bigint is the real fix and not a three-days-out change.
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) {
+    throw new X402Error(
+      "UNSUPPORTED_CHALLENGE",
+      `accepts entry price ${raw} exceeds the safe integer range; refusing rather than comparing a rounded amount`
+    );
+  }
+  return value;
 }
 
 /**
@@ -153,23 +170,37 @@ function priceUnits(entry: AcceptsEntry): number {
  */
 export function selectOffer(
   challenge: X402Challenge,
-  options: { allowedAssets?: string[] } = {}
+  options: { allowedAssets?: string[]; allowedNetworks?: string[] } = {}
 ): SelectedOffer {
   if (challenge.accepts.length === 0) {
     throw new X402Error("UNSUPPORTED_CHALLENGE", "challenge carried an empty accepts[] array");
   }
 
+  // Both allow-lists filter *before* the cheapest entry is chosen, rather than
+  // checking the winner afterwards. A challenge that offers a disallowed asset
+  // alongside an allowed one should be payable on the allowed one; rejecting
+  // the whole challenge because the cheapest entry happened to be the bad one
+  // would refuse business we can legitimately do.
+  //
+  // The network list matters as much as the asset list. "15 units of token X"
+  // means nothing without knowing which chain token X is on: an attacker who
+  // deploys a contract at a familiar-looking address on a chain we never meant
+  // to touch gets a signature for an asset we never meant to hold.
   const allowed = options.allowedAssets?.map((asset) => asset.toLowerCase());
+  const networks = options.allowedNetworks?.map((network) => network.toLowerCase());
   const candidates = challenge.accepts
     .map((entry, acceptsIndex) => ({ entry, acceptsIndex }))
     .filter(({ entry }) => LOCAL_SIGNABLE_SCHEMES.includes(String(entry.scheme) as never))
-    .filter(({ entry }) => !allowed || allowed.includes(String(entry.asset).toLowerCase()));
+    .filter(({ entry }) => !allowed || allowed.includes(String(entry.asset).toLowerCase()))
+    .filter(({ entry }) => !networks || networks.includes(String(entry.network).toLowerCase()));
 
   if (candidates.length === 0) {
-    const offered = challenge.accepts.map((entry) => `${entry.scheme}/${entry.asset}`).join(", ");
+    const offered = challenge.accepts
+      .map((entry) => `${entry.scheme}/${entry.asset}@${entry.network}`)
+      .join(", ");
     throw new X402Error(
       "UNSUPPORTED_CHALLENGE",
-      `no accepts entry is both locally signable (${LOCAL_SIGNABLE_SCHEMES.join("|")}) and asset-allowed; vendor offered: ${offered}`
+      `no accepts entry is locally signable (${LOCAL_SIGNABLE_SCHEMES.join("|")}), asset-allowed and network-allowed; vendor offered: ${offered}`
     );
   }
 

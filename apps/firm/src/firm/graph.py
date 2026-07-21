@@ -124,6 +124,31 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
     return state
 
 
+#: Procurer error codes that describe the Firm's own decision, limitation, or
+#: bug rather than anything the vendor did. Penalising these manufactures a
+#: false accusation against a real third party, which is the exact failure that
+#: libelled OKLink during G2 — there the validator invented the failure, here it
+#: would be the procurement loop.
+#:
+#: The demo makes it concrete: Clawby #3209 lists at 5,000 base units and its
+#: live 402 demands 3,000,000. Our cap correctly refuses to sign. Recording that
+#: as a vendor timeout would put a fabricated -10 against a live agent on camera,
+#: for the crime of us having a spending limit.
+#:
+#: PAYMENT_FAILED is deliberately on this list even though it is ambiguous — it
+#: can mean a stale signature of ours as easily as a misbehaving vendor. Given
+#: the history, the tie goes to not accusing anyone.
+_NOT_VENDOR_FAULT = frozenset(
+    {
+        "CAP_EXCEEDED",
+        "UNSUPPORTED_CHALLENGE",
+        "REQUIRES_HUMAN",
+        "PROCURER_ERROR",
+        "PAYMENT_FAILED",
+    }
+)
+
+
 async def _procure_subtask(
     state: FirmGraphState,
     subtask: Any,
@@ -181,7 +206,32 @@ async def _procure_subtask(
             )
         )
         if not response.ok or response.result is None or response.receipt is None:
-            state["performance"].record_timeout(vendor.agent_id)
+            code = response.error_code or "UNKNOWN"
+            if code in _NOT_VENDOR_FAULT:
+                # Our decision, our limitation, or our bug. The vendor answered
+                # correctly and we chose not to proceed, so it goes in the
+                # receipt as a rejection with the real reason and NOTHING is
+                # recorded against the vendor's trust score.
+                state.setdefault("rejected", []).append(
+                    VendorRejection(
+                        agent_id=vendor.agent_id,
+                        reason=f"not hired ({code}): {response.detail or 'no detail'}",
+                    )
+                )
+                store.transition(
+                    task,
+                    JobState.PROCURING,
+                    f"did not hire {vendor.agent_id}: {code}; the Firm's own decision, not a vendor failure",
+                    subtask.subtask,
+                )
+            else:
+                state["performance"].record_timeout(vendor.agent_id)
+                store.transition(
+                    task,
+                    JobState.PROCURING,
+                    f"{vendor.agent_id} failed to deliver ({code}); trying next candidate",
+                    subtask.subtask,
+                )
             continue
 
         validation = validate(response.result, {"acceptance": subtask.subtask})
@@ -316,7 +366,19 @@ def build_provenance(
     books_enabled = get_settings().enable_treasury_books
     books_cost = Money.usdt(50_000) if books_enabled else Money.usdt(0)
     total_outlay = vendor_costs.units() + books_cost.units()
-    margin = task.quote.price.units() - total_outlay
+
+    # A refunded job earned nothing. The quoted price went back to the buyer, so
+    # our revenue on it is zero and every unit we paid vendors came out of our
+    # own pocket — the guarantee working exactly as advertised.
+    #
+    # Computing margin against the quoted price regardless of outcome made the
+    # receipt claim we RETAINED money we had just given back, and claim it in
+    # our favour, on the most judge-visible arithmetic in the entry. On a 600,000
+    # job with 300,000 of vendor cost it read "300,000 retained" when the truth
+    # was "300,000 absorbed" — the sign was inverted on the number that carries
+    # the whole guarantee story.
+    revenue = 0 if guarantee_status == "refunded" else task.quote.price.units()
+    margin = revenue - total_outlay
     return ProvenanceReceipt(
         task_id=task.task_id,
         goal=task.goal,

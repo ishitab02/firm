@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node scenario.js",
+    "background-check": "node background-check.js",
     "start:gateway": "node scenario.js --gateway-url=http://127.0.0.1:8790",
     "start:live": "node scenario.js --live"
   },

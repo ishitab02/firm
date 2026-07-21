@@ -13,13 +13,24 @@ class Procurer(Protocol):
 
 
 class HttpProcurer:
-    def __init__(self, base_url: str, timeout_seconds: float = 65.0) -> None:
+    #: Bearer token for the procurer's spending routes. Unset is correct and
+    #: normal when the procurer listens on loopback, which is how it runs
+    #: locally. It is required once the procurer is on a container network,
+    #: because anything that can reach /pay-and-call can spend up to the caps —
+    #: the procurer itself refuses a non-loopback bind without one.
+    def __init__(self, base_url: str, timeout_seconds: float = 65.0, auth_token: str | None = None) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.auth_token = auth_token
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.auth_token}"} if self.auth_token else {}
 
     async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(f"{self.base_url}/pay-and-call", json=request.model_dump())
+            response = await client.post(
+                f"{self.base_url}/pay-and-call", json=request.model_dump(), headers=self._headers()
+            )
         response.raise_for_status()
         return PayAndCallResponse.model_validate(response.json())
 
@@ -28,6 +39,7 @@ class HttpProcurer:
             response = await client.post(
                 f"{self.base_url}/refund",
                 json={"task_id": task_id, "to_address": to_address, "amount": amount},
+                headers=self._headers(),
             )
         response.raise_for_status()
         return dict(response.json())

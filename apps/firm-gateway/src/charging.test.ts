@@ -7,8 +7,10 @@ import {
   ChargingNotConfigured,
   encodeRequirements,
   encodeSettlement,
+  facilitatorUrlFor,
   paymentHeaderFrom,
   sellerConfigFromEnv,
+  settlePayment,
   verifyPayment
 } from "./charging.js";
 
@@ -24,12 +26,18 @@ const spec = {
 
 const servers: http.Server[] = [];
 
+/**
+ * Records the path as well as the body, because verify and settle are distinct
+ * operations against distinct routes and a fake that answers both identically
+ * would hide the difference — which is exactly how "we never settle" survived
+ * a green test suite.
+ */
 async function startFacilitator(status: number, body: unknown) {
-  const seen: unknown[] = [];
+  const seen: Array<{ path: string; body: unknown }> = [];
   const server = http.createServer(async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
-    seen.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+    seen.push({ path: req.url ?? "", body: JSON.parse(Buffer.concat(chunks).toString("utf8")) });
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   });
@@ -56,6 +64,30 @@ describe("seller configuration", () => {
     process.env.FIRM_CHARGE_ASSET = "0xAAAA";
     process.env.FIRM_CHARGE_NETWORK = "eip155:196";
     expect(sellerConfigFromEnv()).toMatchObject({ payTo: "0xfirm", asset: "0xAAAA" });
+  });
+});
+
+describe("facilitatorUrlFor", () => {
+  // OKX's facilitator lives under a path prefix, and `new URL("/verify", base)`
+  // drops it — a leading slash resets to the root. Every call would have gone
+  // to https://web3.okx.com/verify, and the failure would have read as "the
+  // facilitator rejected us" rather than "we called a URL that does not exist".
+  it("preserves a path prefix on the base URL", () => {
+    expect(facilitatorUrlFor("https://web3.okx.com/api/v6/pay/x402", "verify")).toBe(
+      "https://web3.okx.com/api/v6/pay/x402/verify"
+    );
+    expect(facilitatorUrlFor("https://web3.okx.com/api/v6/pay/x402", "settle")).toBe(
+      "https://web3.okx.com/api/v6/pay/x402/settle"
+    );
+  });
+
+  it("tolerates a trailing slash and a leading slash on the route", () => {
+    expect(facilitatorUrlFor("https://host/api/", "verify")).toBe("https://host/api/verify");
+    expect(facilitatorUrlFor("https://host/api", "/verify")).toBe("https://host/api/verify");
+  });
+
+  it("still works for a bare host, which is what the local fake uses", () => {
+    expect(facilitatorUrlFor("http://127.0.0.1:9999", "settle")).toBe("http://127.0.0.1:9999/settle");
   });
 });
 
@@ -89,19 +121,23 @@ describe("verifyPayment", () => {
     expect(result).toMatchObject({ ok: false, reason: /not configured/ });
   });
 
-  it("accepts a payment the facilitator validates and carries the tx through", async () => {
-    const { url, seen } = await startFacilitator(200, {
-      isValid: true,
-      payer: "0xbuyer",
-      transaction: "0xsettled",
-      amount: "4800000"
-    });
+  // Verification answers "is this signature valid for these requirements". It
+  // does not broadcast anything, so a real facilitator has no transaction to
+  // report here. The fixture used to return `transaction: "0xsettled"`, which
+  // made this test look like proof that payment had settled when nothing in the
+  // gateway had settled anything.
+  it("accepts a payment the facilitator validates, and hits /verify to do it", async () => {
+    const { url, seen } = await startFacilitator(200, { isValid: true, payer: "0xbuyer", amount: "4800000" });
 
     const requirements = buildRequirements(spec);
     const result = await verifyPayment("payment-header", requirements, { facilitatorUrl: url });
 
-    expect(result).toMatchObject({ ok: true, payer: "0xbuyer", transaction: "0xsettled" });
-    expect(seen[0]).toMatchObject({ paymentHeader: "payment-header", paymentRequirements: requirements.accepts[0] });
+    expect(result).toMatchObject({ ok: true, payer: "0xbuyer" });
+    expect(seen[0].path).toBe("/verify");
+    expect(seen[0].body).toMatchObject({
+      paymentHeader: "payment-header",
+      paymentRequirements: requirements.accepts[0]
+    });
   });
 
   it("rejects when the facilitator says the payment is invalid", async () => {
@@ -122,6 +158,60 @@ describe("verifyPayment", () => {
   });
 });
 
+/**
+ * Settlement is the step that actually redeems the buyer's authorization. The
+ * gateway used to stop after verification, which meant every paid call was
+ * served for free while the response header claimed a successful payment.
+ */
+describe("settlePayment", () => {
+  it("settles against /settle and returns the transaction", async () => {
+    const { url, seen } = await startFacilitator(200, {
+      success: true,
+      transaction: "0xsettled",
+      payer: "0xbuyer",
+      amount: "4800000"
+    });
+
+    const requirements = buildRequirements(spec);
+    const result = await settlePayment("payment-header", requirements, { facilitatorUrl: url });
+
+    expect(result).toMatchObject({ ok: true, transaction: "0xsettled", payer: "0xbuyer" });
+    expect(seen[0].path).toBe("/settle");
+  });
+
+  // "Settled, but we cannot tell you the transaction" is indistinguishable from
+  // "not settled", and the PAYMENT-RESPONSE header would be asserting a payment
+  // we have no evidence for.
+  it("refuses to report success without a transaction reference", async () => {
+    const { url } = await startFacilitator(200, { success: true, payer: "0xbuyer" });
+    const result = await settlePayment("h", buildRequirements(spec), { facilitatorUrl: url });
+    expect(result).toMatchObject({ ok: false, reason: /without a transaction reference/ });
+  });
+
+  it("fails closed when the facilitator declines to settle", async () => {
+    const { url } = await startFacilitator(200, { success: false, errorReason: "authorization_expired" });
+    const result = await settlePayment("h", buildRequirements(spec), { facilitatorUrl: url });
+    expect(result).toMatchObject({ ok: false, reason: "authorization_expired" });
+  });
+
+  it("fails closed when no facilitator is configured, rather than assuming settlement", async () => {
+    const result = await settlePayment("h", buildRequirements(spec), {});
+    expect(result).toMatchObject({ ok: false, reason: /not configured/ });
+  });
+
+  it("fails closed when the facilitator errors or is unreachable", async () => {
+    const { url } = await startFacilitator(500, { error: "boom" });
+    expect(await settlePayment("h", buildRequirements(spec), { facilitatorUrl: url })).toMatchObject({
+      ok: false,
+      reason: /HTTP 500/
+    });
+    expect(await settlePayment("h", buildRequirements(spec), { facilitatorUrl: "http://127.0.0.1:1" })).toMatchObject({
+      ok: false,
+      reason: /settlement failed/
+    });
+  });
+});
+
 describe("header handling", () => {
   it("reads both the v2 and the legacy v1 header names", () => {
     expect(paymentHeaderFrom({ "payment-signature": "v2" })).toBe("v2");
@@ -129,11 +219,25 @@ describe("header handling", () => {
     expect(paymentHeaderFrom({})).toBeUndefined();
   });
 
-  it("encodes a settlement the buyer can decode", () => {
-    const encoded = encodeSettlement({ ok: true, transaction: "0xabc", payer: "0xbuyer", amount: "1", raw: {} });
+  // Shape verified against the real thing: the PAYMENT-RESPONSE headers OKLink
+  // #2023 returned for G1 and G2 decode to
+  //   {"success":true,"transaction":"0x…","network":"eip155:196","payer":"0x…"}
+  // so `success` is the field the marketplace actually uses. We emit `status`
+  // too, since the x402 spec examples use that.
+  it("encodes a settlement in the shape real marketplace ASPs emit", () => {
+    const encoded = encodeSettlement({
+      ok: true,
+      transaction: "0xabc",
+      payer: "0xbuyer",
+      amount: "1",
+      network: "eip155:196",
+      raw: {}
+    });
     expect(JSON.parse(Buffer.from(encoded, "base64").toString("utf8"))).toEqual({
+      success: true,
       status: "success",
       transaction: "0xabc",
+      network: "eip155:196",
       payer: "0xbuyer",
       amount: "1"
     });

@@ -1,0 +1,37 @@
+# The money spine. The only component that holds a key.
+#
+#   fly deploy --config fly.procurer.toml
+#
+# DELIBERATELY NO [http_service] AND NO PUBLIC IP. Anything that can reach
+# /pay-and-call can spend the Firm's money up to the caps. With no services
+# block Fly allocates no public address, so the only route in is the private
+# 6PN network, from siblings in this org, holding PROCURER_AUTH_TOKEN.
+#
+# If you ever `fly ips allocate` on this app, you have published a spending API
+# to the internet. Don't.
+app = "firm-procurer"
+primary_region = "sin"
+
+[build]
+  dockerfile = "packages/procurer/Dockerfile"
+
+[env]
+  PORT = "8787"
+  # Must be "::" — 6PN is IPv6-only, and the worker reaches this at
+  # firm-procurer.internal:8787. A 0.0.0.0 bind is IPv4 and answers nothing there.
+  HOST = "::"
+  # Off until a human explicitly arms it. The procurer additionally refuses to
+  # start with real payments on unless both x402 allow-lists are set.
+  REAL_PAYMENTS_ENABLED = "false"
+  REAL_REFUNDS_ENABLED = "false"
+  X402_ALLOWED_ASSETS = "0x779ded0c9e1022225f8e0630b35a9b54be713736"
+  X402_ALLOWED_NETWORKS = "eip155:196"
+
+# Secrets, set with `fly secrets set -a firm-procurer`:
+#   DATABASE_URL
+#   PROCURER_AUTH_TOKEN   required — the process refuses a non-loopback bind without it
+#   FIRM_WALLET_KEY       ONLY when a human arms real payments. Never in the repo.
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

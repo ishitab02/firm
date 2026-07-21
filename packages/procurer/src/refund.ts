@@ -27,6 +27,28 @@ export function realRefundsEnabled(): boolean {
   return process.env.REAL_REFUNDS_ENABLED === "true";
 }
 
+export type RefundMode = "real" | "simulated" | "requires_human";
+
+/**
+ * Which of the three things /refund may do, given the two independent switches.
+ *
+ * The only interesting cell is real payments + no real refunds. A simulated
+ * refund tx is an honest artefact when the payment was also simulated — the
+ * whole run is labelled SIMULATED and nobody is out any money. The moment real
+ * payments are on, that same simulated tx becomes a fabricated hash handed back
+ * for a buyer who genuinely paid, which the worker then persists and reports as
+ * REFUNDED. It breaks the no-fabricated-tx rule and the delivery guarantee in
+ * one step, so it fails closed and asks for a human instead.
+ *
+ * This is a reachable configuration, not a theoretical one: G1 and G2 both ran
+ * under it, because the refund-wallet question (payer 0xc029… is not the
+ * CLI-logged-in account) is still open.
+ */
+export function refundMode(switches: { realPayments: boolean; realRefunds: boolean }): RefundMode {
+  if (switches.realRefunds) return "real";
+  return switches.realPayments ? "requires_human" : "simulated";
+}
+
 export async function executeRefund(request: {
   toAddress: string;
   amountUnits: number;

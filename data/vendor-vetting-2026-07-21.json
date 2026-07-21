@@ -1,0 +1,429 @@
+{
+  "generated_at": "2026-07-21T13:44:38.199Z",
+  "index": "data/vendor-index.json",
+  "capability": null,
+  "method": {
+    "probe": "one unpaid POST per agent; read whatever the endpoint answers",
+    "cost": "none — no payment was signed or sent for any probe",
+    "attempts": "up to 2, retried only on network-level failure",
+    "timeout_ms": 12000,
+    "population": "the FIRST endpoint-bearing service per agent, not every service",
+    "what_it_proves": "endpoint liveness, x402 conformance, and the price actually demanded",
+    "what_it_does_not_prove": "that a paid response is correct or useful; that an agent's OTHER services share this verdict"
+  },
+  "summary": {
+    "probed": 15,
+    "hireable": 7,
+    "dead_or_misrouted": 8,
+    "above_listing": 2,
+    "served_free": 0
+  },
+  "results": [
+    {
+      "agent_id": "2143",
+      "name": "Predexon",
+      "vendor_endpoint": "https://a2mcp.predexon.com/v1/markets/search",
+      "tool": "Predexon Market Search",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"error\":\"not_found\"}",
+      "latency_ms": 419,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5082",
+      "name": "Proof of Behavior",
+      "vendor_endpoint": "https://cerberus-production-9a57.up.railway.app/prove",
+      "tool": "BehaviorProof",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 22,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "5047",
+      "name": "Argus",
+      "vendor_endpoint": "https://argus-agent-production-ab97.up.railway.app/okx/scan",
+      "tool": "Multi-Agent Contract Audit",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 24,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "3733",
+      "name": "Scope",
+      "vendor_endpoint": "https://scope-production-b104.up.railway.app/api/analyze",
+      "tool": "Wallet Health & Story Report",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 24,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "300000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "5524",
+      "name": "API2ASP Factory",
+      "vendor_endpoint": "https://api2asp-factory.vercel.app/api/v1/analyze-openapi",
+      "tool": "OpenAPI ASP Analysis",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 415,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x7db2bcac1b61b5a9eb906b3c22c81200998fb8cc",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5557",
+      "name": "Pitchook",
+      "vendor_endpoint": "https://pitchook.xyz/v1/x402/execute",
+      "tool": "Bring-Your-Own-Key API Call",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 20000 base units via exact",
+      "latency_ms": 691,
+      "live_amount": {
+        "amount": "20000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "20000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779dEd0c9e1022225f8E0630b35a9b54BE713736",
+      "declared_decimals": 6,
+      "pay_to": "0xa06ec7302917c4bd51c521330ec970629b4e047f",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3118",
+      "name": "CoinWM Open API",
+      "vendor_endpoint": "https://api.coinwm.com/api/services/douyin-video-search",
+      "tool": "抖音视频搜索查询",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"error\":\"Not found\"}",
+      "latency_ms": 770,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "30000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5175",
+      "name": "Lumora Stock Data Hub",
+      "vendor_endpoint": "https://us-stock-data-service-production.up.railway.app/v1/latest",
+      "tool": "US Stock Latest Minute Bars",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 4,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "2013",
+      "name": "CoinAnk OpenAPI",
+      "vendor_endpoint": "https://open-api.coinank.com/api/etf/getUsBtcEtf",
+      "tool": "US BTC ETF",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 1000 base units via exact",
+      "latency_ms": 224,
+      "live_amount": {
+        "amount": "1000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 0.1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x4ae46a509f6b1d9056937ba4500cb143933d2dc8",
+      "declared_decimals": null,
+      "pay_to": "0xb1257e75791baa36646113d8b1fdfc83b3e2d0b7",
+      "schemes_offered": [
+        "exact",
+        "exact",
+        "aggr_deferred",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2023",
+      "name": "Onchain Data Explorer",
+      "vendor_endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_address_balance_history",
+      "tool": "Address Balance Snapshot",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 15 base units via exact",
+      "latency_ms": 279,
+      "live_amount": {
+        "amount": "15",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "15",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xa7e37604ebab94408159e405033a455f820fd987",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3209",
+      "name": "Clawby",
+      "vendor_endpoint": "https://api.openclawby.com/x402/topup",
+      "tool": "Live Market Data API",
+      "verdict": "PRICE_MISMATCH",
+      "hireable": true,
+      "detail": "listed 5000 but the live 402 demands 3000000 (600x)",
+      "latency_ms": 745,
+      "live_amount": {
+        "amount": "3000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "5000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 600,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x15ddde1a321400f4836e222c0e8b715ac1e3d942",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6560",
+      "name": "SignalForge AI",
+      "vendor_endpoint": "https://signalforge-ai.onrender.com/analyze",
+      "tool": "Narrative Intelligence API",
+      "verdict": "PRICE_MISMATCH",
+      "hireable": true,
+      "detail": "listed 10000 but the live 402 demands 500000 (50x)",
+      "latency_ms": 387,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 50,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xe8f96910a685605a81864ca79904456df9112d59",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2134",
+      "name": "Predict Protocol",
+      "vendor_endpoint": "https://api.predictprotocol.app/x402/odds",
+      "tool": "Predict Odds API",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 8,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "300000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "2135",
+      "name": "Newsliquid",
+      "vendor_endpoint": "https://x402.6551.io/okx/news_type",
+      "tool": "OpenNews News Type",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 2000 base units via exact",
+      "latency_ms": 251,
+      "live_amount": {
+        "amount": "2000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "2000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2ec31068d6451510841578981081124a0f75cc64",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2012",
+      "name": "Barker Yield Agent",
+      "vendor_endpoint": "https://mcp.barker.money/barker_market_overview",
+      "tool": "Stablecoin Market Overview",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /barker_market_overview</pre>\\n<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML=\\",
+      "latency_ms": 1581,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "1000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    }
+  ]
+}

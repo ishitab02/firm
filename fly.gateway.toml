@@ -1,0 +1,51 @@
+# The Firm's public endpoint — the one OKX calls and validates.
+#
+#   fly deploy --config fly.gateway.toml
+#
+# This is the ONLY app in the stack with a public address. The procurer and the
+# worker are reachable on Fly's private 6PN network and nowhere else.
+app = "firm-gateway"
+primary_region = "sin"
+
+[build]
+  dockerfile = "apps/firm-gateway/Dockerfile"
+
+[env]
+  PORT = "8790"
+  # "::" rather than "0.0.0.0": Fly's private network is IPv6, and a Node server
+  # bound to 0.0.0.0 listens on IPv4 only. Binding "::" is dual-stack on Linux,
+  # so both the public proxy and 6PN siblings can reach it.
+  HOST = "::"
+  # The process refuses to bind a public interface in bypass mode, so this is
+  # belt-and-braces rather than the only guard.
+  CHARGING_MODE = "enforce"
+  PRICING_MODE = "TIERS"
+  EXPRESS_ENABLED = "true"
+  EXPRESS_JOB_TYPES = "market_snapshot"
+  # 0.1 USDT
+  EXPRESS_PRICE_UNITS = "100000"
+
+# Secrets, set with `fly secrets set -a firm-gateway`:
+#   DATABASE_URL, FIRM_PAYTO_ADDRESS, FIRM_CHARGE_ASSET, FIRM_CHARGE_NETWORK
+#   X402_FACILITATOR_URL  (unset => every paid call fails closed, by design)
+
+[http_service]
+  internal_port = 8790
+  force_https = true
+  auto_stop_machines = false
+  # Never scale to zero. A listing under review that answers a cold start with a
+  # timeout is indistinguishable from a dead endpoint, and that is precisely the
+  # rejection Treasury collected twice.
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

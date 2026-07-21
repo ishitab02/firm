@@ -2,6 +2,7 @@ import http from "node:http";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
+import { bearerFailure } from "./auth.js";
 import { capsFromEnv } from "./caps.js";
 import {
   ensureTables,
@@ -16,9 +17,10 @@ import {
   spendSnapshot
 } from "./db.js";
 import { units } from "./money.js";
-import { executeRefund, realRefundsEnabled } from "./refund.js";
+import { executeRefund, realRefundsEnabled, refundMode } from "./refund.js";
 import { realSigner } from "./signer.js";
 import { payAndCallVendor } from "./vendor.js";
+import { vetVendors } from "./vet.js";
 
 const money = z.object({ amount: z.string(), decimals: z.number(), token: z.string() });
 const payAndCallSchema = z.object({
@@ -34,16 +36,56 @@ const refundSchema = z.object({
   to_address: z.string(),
   amount: money
 });
+const vetCandidateSchema = z.object({
+  vendor_endpoint: z.string(),
+  tool: z.string(),
+  args: z.record(z.unknown()).optional(),
+  listed_amount: money.optional(),
+  max_amount: money.optional()
+});
+/** Accepts one candidate inline, or a batch. Exactly one form must be present. */
+const vetSchema = vetCandidateSchema
+  .partial()
+  .extend({ candidates: z.array(vetCandidateSchema).min(1).optional() })
+  .refine(
+    (value) => Boolean(value.candidates) !== Boolean(value.vendor_endpoint && value.tool),
+    "provide either `candidates`, or `vendor_endpoint` + `tool`, but not both"
+  );
 
 function realPaymentsEnabled(): boolean {
   return process.env.REAL_PAYMENTS_ENABLED === "true";
 }
 
-function allowedAssets(): string[] | undefined {
-  const raw = process.env.X402_ALLOWED_ASSETS;
+function authToken(): string | undefined {
+  const token = process.env.PROCURER_AUTH_TOKEN;
+  return token && token.length > 0 ? token : undefined;
+}
+
+/** Returns null when the request may proceed, or the reason it may not. */
+function authFailure(req: http.IncomingMessage): string | null {
+  return bearerFailure(req.headers.authorization, authToken());
+}
+
+function envList(name: string): string[] | undefined {
+  const raw = process.env[name];
   if (!raw) return undefined;
   const list = raw.split(",").map((entry) => entry.trim()).filter(Boolean);
   return list.length > 0 ? list : undefined;
+}
+
+/** Token contracts the procurer may pay in. */
+function allowedAssets(): string[] | undefined {
+  return envList("X402_ALLOWED_ASSETS");
+}
+
+/**
+ * CAIP-2 chains the procurer may pay on. As load-bearing as the asset list:
+ * "15 units of token X" is meaningless without the chain, so an attacker who
+ * deploys a familiar-looking contract address on a chain we never meant to
+ * touch would otherwise clear an asset-only allow-list.
+ */
+function allowedNetworks(): string[] | undefined {
+  return envList("X402_ALLOWED_NETWORKS");
 }
 
 async function readJson(req: http.IncomingMessage): Promise<unknown> {
@@ -138,6 +180,11 @@ async function handlePayAndCall(body: unknown) {
       {
         signer: realSigner(),
         allowedAssets: allowedAssets(),
+        allowedNetworks: allowedNetworks(),
+        // Real money is moving, so the asset's scale must be known before we
+        // sign — declared by the vendor, or pinned by the allow-lists above,
+        // which are mandatory in this mode.
+        requireKnownDecimals: true,
         decimals: request.max_amount.decimals,
         token: request.max_amount.token,
         timeoutMs: Number(process.env.VENDOR_TIMEOUT_MS ?? 60_000),
@@ -209,7 +256,27 @@ async function handleRefund(body: unknown) {
     return { error_code: "REFUND_IN_FLIGHT", detail: "a refund for this task is already in flight" };
   }
 
-  if (!realRefundsEnabled()) {
+  const mode = refundMode({ realPayments: realPaymentsEnabled(), realRefunds: realRefundsEnabled() });
+
+  // Fails closed, and releases the reservation: nothing was refunded, so it must
+  // not keep holding against the daily refund cap. The detail carries the exact
+  // command a human can run — preparing it without firing it is the standing
+  // rule for real-money operations.
+  if (mode === "requires_human") {
+    const response = {
+      error_code: "REQUIRES_HUMAN",
+      detail:
+        `real payments are enabled but real refunds are not, so this refund was NOT sent. ` +
+        `Owed: ${request.amount.amount} base units of ${request.amount.token} to ${request.to_address} ` +
+        `for task ${request.task_id}. Send it manually, then set REAL_REFUNDS_ENABLED=true to close this path: ` +
+        `onchainos wallet send --recipient ${request.to_address} --amt ${amountUnits} ` +
+        `--chain $REFUND_CHAIN --contract-token $REFUND_TOKEN_CONTRACT --force`
+    };
+    await releaseRefund(request.task_id, response);
+    return response;
+  }
+
+  if (mode === "simulated") {
     const response = { tx: simulatedTx("refund", request.task_id) };
     await settleRefund(request.task_id, response);
     return response;
@@ -224,6 +291,45 @@ async function handleRefund(body: unknown) {
   const response = { tx: result.tx, detail: result.detail };
   await settleRefund(request.task_id, response);
   return response;
+}
+
+/**
+ * Vetting is free and never signs, so it deliberately does NOT go through the
+ * reservation or cap machinery — there is nothing to reserve. It is also not an
+ * authorisation: /pay-and-call re-reads the challenge and re-checks every cap
+ * against the amount it is about to sign, because a vendor can reprice between
+ * the probe and the call.
+ */
+async function handleVet(body: unknown) {
+  const request = vetSchema.parse(body);
+  const candidates = request.candidates ?? [
+    {
+      vendor_endpoint: request.vendor_endpoint!,
+      tool: request.tool!,
+      args: request.args,
+      listed_amount: request.listed_amount,
+      max_amount: request.max_amount
+    }
+  ];
+
+  const results = await vetVendors(
+    candidates.map((candidate) => ({
+      vendorEndpoint: candidate.vendor_endpoint,
+      tool: candidate.tool,
+      args: candidate.args,
+      listedAmount: candidate.listed_amount,
+      maxAmount: candidate.max_amount
+    })),
+    { allowedAssets: allowedAssets(), timeoutMs: Number(process.env.VET_TIMEOUT_MS ?? 10_000) }
+  );
+
+  return {
+    ok: true,
+    cost: "none — no payment was signed or sent for any probe",
+    vetted: results.length,
+    hireable: results.filter((result) => result.hireable).length,
+    results
+  };
 }
 
 await ensureTables();
@@ -248,6 +354,14 @@ const server = http.createServer(async (req, res) => {
       send(res, 405, { error: "METHOD_NOT_ALLOWED" });
       return;
     }
+    // Everything below this point can spend money or read the spend ledger.
+    // /health and /caps above are deliberately open: they carry no secrets and
+    // a container healthcheck needs them.
+    const denied = authFailure(req);
+    if (denied) {
+      send(res, 401, { ok: false, error_code: "UNAUTHORIZED", detail: denied });
+      return;
+    }
     const body = await readJson(req);
     if (req.url === "/pay-and-call") {
       send(res, 200, await handlePayAndCall(body));
@@ -257,13 +371,57 @@ const server = http.createServer(async (req, res) => {
       send(res, 200, await handleRefund(body));
       return;
     }
+    if (req.url === "/vet") {
+      send(res, 200, await handleVet(body));
+      return;
+    }
     send(res, 404, { error: "NOT_FOUND" });
   } catch (error) {
     send(res, 500, { ok: false, error_code: "PROCURER_ERROR", detail: String(error) });
   }
 });
 
-server.listen(Number(process.env.PORT ?? 8787), "127.0.0.1", () => {
+/**
+ * The procurer is a spending API: anything that can reach /pay-and-call can
+ * move the Firm's money, up to the caps. On a laptop that is fine, because it
+ * only ever listens on loopback. In a container it has to be reachable by the
+ * worker over the compose network, and then "whoever can reach it" is no longer
+ * just us.
+ *
+ * So a non-loopback bind requires PROCURER_AUTH_TOKEN, and refuses to start
+ * without one. Loopback keeps working with no token, so nothing about local
+ * development changes.
+ */
+const host = process.env.HOST ?? "127.0.0.1";
+const port = Number(process.env.PORT ?? 8787);
+const isPublicBind = host !== "127.0.0.1" && host !== "localhost" && host !== "::1";
+
+// Both allow-lists are optional in simulation and mandatory once real money can
+// move. An empty asset list means "pay in whatever the vendor names"; an empty
+// network list means "on whatever chain it names". Together those turn a
+// malicious 402 into a signature for an asset we never intended to hold, and
+// the cap arithmetic cannot see the difference because base units are just
+// integers. Refuse at startup rather than mid-payment.
+if (realPaymentsEnabled() && (!allowedAssets() || !allowedNetworks())) {
+  console.error(
+    "[procurer] refusing to start with REAL_PAYMENTS_ENABLED=true and no X402_ALLOWED_ASSETS " +
+      "or X402_ALLOWED_NETWORKS. Without both, a vendor chooses which asset and which chain we " +
+      "sign for, and a base-unit cap check cannot tell the difference."
+  );
+  process.exit(1);
+}
+
+if (isPublicBind && !authToken()) {
+  console.error(
+    `[procurer] refusing to bind ${host} without PROCURER_AUTH_TOKEN. Anything that can reach ` +
+      "/pay-and-call can spend the Firm's money up to the caps; on a non-loopback interface that " +
+      "must be authenticated. Bind 127.0.0.1 for local use, or set a token."
+  );
+  process.exit(1);
+}
+
+server.listen(port, host, () => {
   const mode = realPaymentsEnabled() ? "REAL PAYMENTS ENABLED" : "simulation only";
-  console.log(`firm-procurer listening on http://127.0.0.1:${process.env.PORT ?? 8787} (${mode})`);
+  const auth = authToken() ? "token required" : "loopback only, no token";
+  console.log(`firm-procurer listening on http://${host}:${port} (${mode}, ${auth})`);
 });

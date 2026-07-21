@@ -66,7 +66,7 @@ async def run_one(
 
     resolved_vendors = vendors if vendors is not None else load_vendor_index(Path(settings.vendor_index_path))
     performance = PostgresPerformanceStore(settings.database_url)
-    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url)
+    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url, auth_token=settings.procurer_auth_token)
     completed = await run_task(task, resolved_vendors, store, performance, resolved_procurer)
     return WorkerResult(claimed=True, task=completed)
 
@@ -84,12 +84,47 @@ async def run_task_by_id(
 
     resolved_vendors = vendors if vendors is not None else load_vendor_index(Path(settings.vendor_index_path))
     performance = PostgresPerformanceStore(settings.database_url)
-    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url)
+    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url, auth_token=settings.procurer_auth_token)
     completed = await run_task(task, resolved_vendors, store, performance, resolved_procurer)
     return WorkerResult(claimed=True, task=completed)
 
 
+def assert_stale_window_is_safe(settings: Settings) -> None:
+    """Refuse to start a worker whose stale window can fire mid-job.
+
+    `claim_next_task` reclaims any job whose `updated_at` is older than
+    `worker_stale_after_seconds`, which is how a crashed worker's job gets
+    picked up again. The safety of that depends entirely on a live worker
+    bumping `updated_at` more often than the window: every `store.transition`
+    does, so the real question is the longest gap between two transitions.
+
+    That gap is one vendor call. If a single call can outlast the window, a
+    worker that is merely slow looks identical to a dead one, a second worker
+    claims the same job and restarts it from planning, and both hire vendors
+    at once. The procurer's idempotency on (task_id, subtask_id,
+    vendor_endpoint) absorbs most of that — the second worker replays rather
+    than pays — but only while both workers walk the same candidate order.
+    They need not: sourcing re-ranks against vendor_performance, which the
+    first worker is concurrently mutating. Different order means a different
+    vendor, a new idempotency key, and a genuine second payment.
+
+    So this is a money-safety invariant, not a tidiness one, and it is a
+    configuration mistake rather than a code path — which is exactly the kind
+    worth failing loudly at startup instead of debugging from a double-spend.
+    """
+    # The procurer's own HTTP timeout is the ceiling on one call, plus the
+    # worker's client-side margin. 3x is deliberate slack for a slow node.
+    longest_node_seconds = 65
+    if settings.worker_stale_after_seconds < longest_node_seconds * 3:
+        raise ValueError(
+            f"worker_stale_after_seconds={settings.worker_stale_after_seconds} is too small: a single "
+            f"vendor call can take ~{longest_node_seconds}s, so a live worker would be treated as dead "
+            f"and its job run twice. Set it to at least {longest_node_seconds * 3}."
+        )
+
+
 async def run_loop(settings: Settings, poll_seconds: float = 2.0) -> None:
+    assert_stale_window_is_safe(settings)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signame in ("SIGINT", "SIGTERM"):

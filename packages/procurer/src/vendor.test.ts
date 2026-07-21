@@ -282,6 +282,98 @@ describe("decimal-scale safety", () => {
     expect(order).toEqual([]);
   });
 
+  /**
+   * The undeclared-scale rule, which is narrower than it first looks.
+   *
+   * 41 of the 47 live x402 vendors on this marketplace declare no
+   * `extra.decimals`, OKLink #2023 — the vendor G1 and G2 actually paid —
+   * among them. Demanding a declared scale for every real payment would cut
+   * the hireable pool to six and break a working payment path, so the rule is
+   * that the scale must be KNOWN, not that the vendor must state it. Naming
+   * the asset and the network ourselves is what makes it known.
+   */
+  async function undeclaredScaleVendor() {
+    const server = http.createServer((req, res) => {
+      if (!req.headers["payment-signature"]) {
+        res.writeHead(402, {
+          "content-type": "application/json",
+          "PAYMENT-REQUIRED": b64({ x402Version: 2, accepts: accepts("15") })
+        });
+        res.end("{}");
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "PAYMENT-RESPONSE": b64({ status: "success", transaction: "0xok" })
+      });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    servers.push(server);
+    return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }
+
+  it("refuses an undeclared scale when nothing pins what the asset is", async () => {
+    const order: string[] = [];
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: await undeclaredScaleVendor(), tool: "market_snapshot", args: {} },
+      {
+        ...baseOptions,
+        requireKnownDecimals: true,
+        signer: fakeSigner(order),
+        verifyCaps: async () => {
+          order.push("verify");
+          return null;
+        }
+      }
+    );
+
+    expect(outcome).toMatchObject({ ok: false, error_code: "UNSUPPORTED_CHALLENGE" });
+    expect((outcome as { detail: string }).detail).toMatch(/would be an assumption rather than a fact/);
+    expect(order).toEqual([]);
+  });
+
+  it("refuses an undeclared scale when only the asset list is configured", async () => {
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: await undeclaredScaleVendor(), tool: "market_snapshot", args: {} },
+      {
+        ...baseOptions,
+        requireKnownDecimals: true,
+        allowedAssets: ["0xAAAA"],
+        signer: fakeSigner([]),
+        verifyCaps: async () => null
+      }
+    );
+
+    expect(outcome).toMatchObject({ ok: false, error_code: "UNSUPPORTED_CHALLENGE" });
+  });
+
+  // This is the OKLink case, and it must keep working.
+  it("pays an undeclared scale when both allow-lists pin the asset", async () => {
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: await undeclaredScaleVendor(), tool: "market_snapshot", args: {} },
+      {
+        ...baseOptions,
+        requireKnownDecimals: true,
+        allowedAssets: ["0xAAAA"],
+        allowedNetworks: ["eip155:196"],
+        signer: fakeSigner([]),
+        verifyCaps: async () => null
+      }
+    );
+
+    expect(outcome.ok).toBe(true);
+  });
+
+  it("leaves simulation permissive, so fixture vendors keep working", async () => {
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: await undeclaredScaleVendor(), tool: "market_snapshot", args: {} },
+      { ...baseOptions, signer: fakeSigner([]), verifyCaps: async () => null }
+    );
+
+    expect(outcome.ok).toBe(true);
+  });
+
   it("proceeds when the vendor's declared decimals match", async () => {
     const server = http.createServer((req, res) => {
       const paid = req.headers["payment-signature"];
