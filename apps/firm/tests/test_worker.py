@@ -285,3 +285,44 @@ def test_provenance_economics_reconcile_exactly():
     assert vendors == 15, "vendor costs must be vendor money only, not ours"
     assert receipt.economics.margin_retained_or_absorbed["sign"] == "retained"
     assert vendors + books + margin == price, "the published numbers must reconcile"
+
+
+def test_missing_documented_params_knows_what_a_vendor_declared():
+    """Payment happens before the vendor validates the body, so a call we know
+    cannot succeed must be skipped before it costs anything."""
+    from firm.graph import missing_documented_params
+    from firm.models import Money, VendorService
+
+    oklink = VendorService(
+        tool="Address Balance Snapshot",
+        price=Money.usdt(15),
+        capability="market_snapshot",
+        documented_example_args={
+            "args": {"chainIndex": "1", "address": "0x...", "height": "21000000"},
+            "source": "verbatim_json_literal_in_vendor_service_description",
+        },
+    )
+
+    # Job supplies everything the vendor documented.
+    assert missing_documented_params(oklink, {"chainIndex": "1", "address": "0xabc", "height": "21000000"}) == []
+    # Job supplies nothing useful: all three are missing, reported sorted.
+    assert missing_documented_params(oklink, {"goal": "market snapshot"}) == ["address", "chainIndex", "height"]
+    # Partial coverage still blocks, because the call would still 400.
+    assert missing_documented_params(oklink, {"chainIndex": "1"}) == ["address", "height"]
+
+
+def test_a_vendor_that_documents_nothing_is_not_blocked():
+    """Unknown is not a failure. Most of the marketplace documents nothing, and
+    treating silence as 'requires nothing' or as 'unusable' would both be wrong —
+    we simply cannot pre-check them."""
+    from firm.graph import missing_documented_params
+    from firm.models import Money, VendorService
+
+    undocumented = VendorService(tool="t", price=Money.usdt(10), capability="market_snapshot")
+    assert missing_documented_params(undocumented, {}) == []
+
+    empty_doc = VendorService(
+        tool="t", price=Money.usdt(10), capability="market_snapshot",
+        documented_example_args={"args": {}, "source": "x"},
+    )
+    assert missing_documented_params(empty_doc, {}) == []

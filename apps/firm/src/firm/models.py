@@ -92,6 +92,11 @@ class VendorService(BaseModel):
     tool: str
     price: Money
     capability: str
+    #: What the vendor published about its own request body, when it published
+    #: anything: {"args": {...}, "source": "..."} from tools/vendor-index.
+    #: None means unknown — never "takes no arguments". Only a handful of
+    #: marketplace services document anything at all.
+    documented_example_args: dict[str, Any] | None = None
 
 
 class VendorIndexEntry(BaseModel):

@@ -141,11 +141,40 @@ async def _procure_subtask(
         )
         if service is None:
             continue
+
+        # Everything above this line is free. Below it we spend, so check what
+        # the vendor told us it needs BEFORE paying for a call that cannot work.
+        args = _vendor_args(task, subtask)
+        missing = missing_documented_params(service, args)
+        if missing:
+            # This is OUR gap, not the vendor's failure. It is recorded as a
+            # rejection with an honest reason and carries NO performance
+            # penalty — penalising a vendor for params we could not supply is
+            # the same false-accusation bug that fired OKLink for delivering
+            # correctly.
+            state.setdefault("rejected", []).append(
+                VendorRejection(
+                    agent_id=vendor.agent_id,
+                    reason=(
+                        "not hired: job supplies no "
+                        + ", ".join(missing)
+                        + ", which this vendor documents as required"
+                    ),
+                )
+            )
+            store.transition(
+                task,
+                JobState.PROCURING,
+                f"skipped {vendor.agent_id} before payment; job lacks {', '.join(missing)}",
+                subtask.subtask,
+            )
+            continue
+
         response = await procurer.pay_and_call(
             PayAndCallRequest(
                 vendor_endpoint=vendor.endpoint,
                 tool=service.tool,
-                args=_vendor_args(task, subtask),
+                args=args,
                 max_amount=service.price,
                 task_id=task.task_id,
                 subtask_id=subtask.subtask,
@@ -341,6 +370,30 @@ def build_graph() -> Any:
     graph.add_edge("refunding", "booking")
     graph.add_edge("booking", END)
     return graph.compile()
+
+
+def missing_documented_params(service: Any, args: dict[str, Any]) -> list[str]:
+    """Params a vendor documented for itself that our request does not supply.
+
+    Payment happens before the vendor validates the body, so calling a vendor
+    whose declared params we cannot satisfy is buying a 400. When the vendor has
+    told us what it needs, we can know that in advance for free.
+
+    Deliberately strict: every documented key is treated as required. We cannot
+    tell an optional key from a mandatory one in a published example, and the
+    two errors are not symmetric — being too strict skips a vendor and costs
+    nothing, being too lax spends real money on a call that cannot succeed.
+
+    A vendor that documents nothing returns [] — unknown is not a failure, and
+    most of the marketplace documents nothing.
+    """
+    documented = getattr(service, "documented_example_args", None)
+    if not isinstance(documented, dict):
+        return []
+    declared = documented.get("args")
+    if not isinstance(declared, dict) or not declared:
+        return []
+    return sorted(key for key in declared if key not in args)
 
 
 def _vendor_args(task: FirmTask, subtask: Any) -> dict[str, Any]:
