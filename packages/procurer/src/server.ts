@@ -107,7 +107,8 @@ async function handlePayAndCall(body: unknown) {
       ceiling: request.max_amount
     },
     ceilingUnits,
-    caps
+    caps,
+    realPaymentsEnabled() ? "real" : "simulated"
   );
 
   if (reservation.kind === "replay") return reservation.response;

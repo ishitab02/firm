@@ -111,12 +111,21 @@ export async function ensureTables() {
     CREATE INDEX IF NOT EXISTS procurer_calls_task_idx ON procurer_calls(task_id);
     CREATE INDEX IF NOT EXISTS procurer_calls_created_idx ON procurer_calls(created_at);
 
+    ALTER TABLE procurer_calls ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'real';
+    -- Backfill from the recorded receipt rather than guessing: a SIMULATED tx
+    -- was never a real payment and must not sit in the real ledger.
+    UPDATE procurer_calls SET mode = 'simulated'
+      WHERE mode = 'real' AND response->'receipt'->>'tx' LIKE 'SIMULATED:%';
+
     ALTER TABLE procurer_refunds ALTER COLUMN response DROP NOT NULL;
     ALTER TABLE procurer_refunds ADD COLUMN IF NOT EXISTS state TEXT NOT NULL DEFAULT 'settled';
     ALTER TABLE procurer_refunds ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
     CREATE INDEX IF NOT EXISTS procurer_refunds_created_idx ON procurer_refunds(created_at);
   `);
 }
+
+/** Real money, or a simulated run. The two keep entirely separate ledgers. */
+export type SpendMode = "real" | "simulated";
 
 export type ReserveOutcome =
   | { kind: "replay"; response: unknown }
@@ -137,19 +146,29 @@ export type ReserveOutcome =
 export async function reserveCall(
   request: { idempotencyKey: string; taskId: string; subtaskId: string; vendorEndpoint: string; ceiling: unknown },
   ceilingUnits: number,
-  caps: Caps
+  caps: Caps,
+  mode: SpendMode
 ): Promise<ReserveOutcome> {
   return withTransaction<ReserveOutcome>(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock($1)", [SPEND_LOCK_ID]);
 
     const existing = await client.query(
-      `SELECT state, response,
+      `SELECT state, response, mode,
               EXTRACT(EPOCH FROM (now() - updated_at))::int AS age_seconds
        FROM procurer_calls WHERE idempotency_key = $1`,
       [request.idempotencyKey]
     );
     const row = existing.rows[0];
     if (row) {
+      // Never replay across modes. A settled simulated receipt returned for a
+      // real request would look exactly like a completed payment that never
+      // happened — and vice versa would silently skip a real one.
+      if (row.mode !== mode) {
+        return {
+          kind: "needs_human",
+          detail: `this idempotency key already has a '${row.mode}' record and this is a '${mode}' request; refusing to mix simulated and real money on one key`
+        };
+      }
       if (row.state === "settled") return { kind: "replay", response: row.response };
       if (row.state === "signed") {
         return {
@@ -180,8 +199,8 @@ export async function reserveCall(
          COALESCE(SUM((reserved_amount->>'amount')::bigint) FILTER (WHERE task_id = $1), 0)::bigint AS task_spend,
          COALESCE(SUM((reserved_amount->>'amount')::bigint) FILTER (WHERE created_at >= date_trunc('day', now())), 0)::bigint AS daily_spend
        FROM procurer_calls
-       WHERE state <> 'released'`,
-      [request.taskId]
+       WHERE state <> 'released' AND mode = $2`,
+      [request.taskId, mode]
     );
     const aggregate = assertAggregateCaps(
       ceilingUnits,
@@ -193,14 +212,15 @@ export async function reserveCall(
 
     await client.query(
       `INSERT INTO procurer_calls
-         (idempotency_key, task_id, subtask_id, vendor_endpoint, amount, reserved_amount, response, state)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $5::jsonb, NULL, 'reserved')`,
+         (idempotency_key, task_id, subtask_id, vendor_endpoint, amount, reserved_amount, response, state, mode)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $5::jsonb, NULL, 'reserved', $6)`,
       [
         request.idempotencyKey,
         request.taskId,
         request.subtaskId,
         request.vendorEndpoint,
-        JSON.stringify(request.ceiling)
+        JSON.stringify(request.ceiling),
+        mode
       ]
     );
     return { kind: "reserved" };
@@ -349,8 +369,9 @@ export async function releaseRefund(taskId: string, response: unknown) {
 export async function spendSnapshot() {
   const result = await pool().query(
     `SELECT
-       COALESCE(SUM((reserved_amount->>'amount')::bigint) FILTER (WHERE created_at >= date_trunc('day', now())), 0)::bigint AS spent_today,
-       COUNT(*) FILTER (WHERE state = 'signed')::int AS unconfirmed_signatures
+       COALESCE(SUM((reserved_amount->>'amount')::bigint) FILTER (WHERE created_at >= date_trunc('day', now()) AND mode = 'real'), 0)::bigint AS spent_today,
+       COALESCE(SUM((reserved_amount->>'amount')::bigint) FILTER (WHERE created_at >= date_trunc('day', now()) AND mode = 'simulated'), 0)::bigint AS simulated_today,
+       COUNT(*) FILTER (WHERE state = 'signed' AND mode = 'real')::int AS unconfirmed_signatures
      FROM procurer_calls
      WHERE state <> 'released'`
   );
@@ -360,6 +381,9 @@ export async function spendSnapshot() {
   );
   return {
     spent_today: Number(result.rows[0]?.spent_today ?? 0),
+    // Reported separately and never mixed into spent_today: simulated runs must
+    // not read as real money, and must not consume a real daily budget.
+    simulated_today: Number(result.rows[0]?.simulated_today ?? 0),
     unconfirmed_signatures: Number(result.rows[0]?.unconfirmed_signatures ?? 0),
     refunded_today: Number(refunds.rows[0]?.refunded_today ?? 0)
   };
