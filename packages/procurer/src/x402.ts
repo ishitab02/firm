@@ -30,13 +30,15 @@ export type AcceptsEntry = {
 
 export type X402Challenge = {
   version: number;
-  /** base64 payload handed verbatim to `onchainos payment pay-local --payload`. */
+  /** base64 of the challenge exactly as the vendor sent it. */
   payloadBase64: string;
+  /** The decoded envelope, kept so a single-offer payload can preserve `resource`. */
+  envelope: Record<string, unknown>;
   accepts: AcceptsEntry[];
 };
 
 export type SelectedOffer = {
-  /** 0-based index into `accepts[]`; passed as `--selected-index`. */
+  /** 0-based index into the vendor's original `accepts[]`. Recorded, not passed. */
   acceptsIndex: number;
   entry: AcceptsEntry;
   /** Price in base units. The only number the cap checks ever see. */
@@ -105,6 +107,7 @@ export function parseChallenge(headers: Record<string, string | undefined>, body
     return {
       version: Number(decoded.x402Version) || 2,
       payloadBase64: headerValue.trim(),
+      envelope: decoded as unknown as Record<string, unknown>,
       accepts: decoded.accepts
     };
   }
@@ -113,6 +116,7 @@ export function parseChallenge(headers: Record<string, string | undefined>, body
     return {
       version: Number(body.x402Version) || 1,
       payloadBase64: Buffer.from(JSON.stringify(body), "utf8").toString("base64"),
+      envelope: body as unknown as Record<string, unknown>,
       accepts: body.accepts
     };
   }
@@ -189,6 +193,27 @@ export function selectOffer(
     payTo: String(best.entry.payTo ?? ""),
     declaredDecimals: declaredDecimals(best.entry)
   };
+}
+
+/**
+ * The payload handed to the signer: the vendor's envelope with `accepts`
+ * narrowed to the single entry we selected and verified against the caps.
+ *
+ * `onchainos payment pay-local` has no `--selected-index` — that flag exists
+ * only on the TEE `payment pay` path. Left to itself the CLI auto-selects an
+ * entry by its own rule, which is not necessarily the entry whose amount we
+ * just checked against the caps. On a challenge offering two `exact` entries at
+ * different prices, we could verify the cheap one and have the CLI sign the
+ * expensive one.
+ *
+ * Narrowing to one entry removes the choice entirely, so the signature can only
+ * ever cover the offer that passed the cap check. The signature itself is over
+ * the payment fields, not over the accepts array, so the vendor accepts a header
+ * derived from the narrowed payload exactly as it would the full one.
+ */
+export function payloadForOffer(challenge: X402Challenge, offer: SelectedOffer): string {
+  const narrowed = { ...challenge.envelope, accepts: [offer.entry] };
+  return Buffer.from(JSON.stringify(narrowed), "utf8").toString("base64");
 }
 
 /** The vendor's declared decimals for its asset, or null if it declared none. */

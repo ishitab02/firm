@@ -14,7 +14,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { assembleV1PaymentHeader, SelectedOffer, X402Challenge, X402Error } from "./x402.js";
+import { assembleV1PaymentHeader, payloadForOffer, SelectedOffer, X402Challenge, X402Error } from "./x402.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -59,9 +59,13 @@ export function realSigner(): Signer {
     const key = walletKeyFromEnv();
     let stdout: string;
     try {
+      // Verified against onchainos 4.2.6: `pay-local` accepts only --payload,
+      // --base-url and --chain. There is no --selected-index; passing one is a
+      // hard argument error. The offer is pinned by narrowing the payload
+      // instead — see payloadForOffer.
       const result = await execFileAsync(
         binary,
-        ["payment", "pay-local", "--payload", challenge.payloadBase64, "--selected-index", String(offer.acceptsIndex)],
+        ["payment", "pay-local", "--payload", payloadForOffer(challenge, offer)],
         {
           // The key lives in the child env and nowhere else.
           env: { ...process.env, EVM_PRIVATE_KEY: key },
