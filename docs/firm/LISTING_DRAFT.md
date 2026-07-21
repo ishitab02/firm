@@ -3,7 +3,7 @@
 Owner: Ishita
 
 Submission placeholders:
-- Ishita Agent ID: `<fill after Agentic Wallet registration>`
+- Ishita Agent ID: `#7138` (Submitted & Under Review)
 - Wallet/listing identity: `ishita02.b@gmail.com / EVM 0x5298633246d682266d5cd7b6da856193da30fa9e / Solana 45j4Kbu98Ktk8y3CgZevP6pGQGGEfiaHmXVNUpADJj1U`
 - Avatar asset: `docs/firm/assets/firm-avatar.png`
 - Pricing mode: `<TIERS unless dynamic quoted amount is confirmed>`
