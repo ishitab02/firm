@@ -235,3 +235,21 @@ describe("declared decimals", () => {
     expect(selectOffer(challenge).declaredDecimals).toBeNull();
   });
 });
+
+describe("safe integer prices", () => {
+  it("refuses an accepts price past the safe integer range rather than rounding it", () => {
+    const challenge = parseChallenge(
+      { "payment-required": b64({ x402Version: 2, accepts: [exactEntry("9007199254740993")] }) },
+      {}
+    );
+    expect(() => selectOffer(challenge)).toThrow(/safe integer range/);
+  });
+
+  it("does not refuse a merely large but exact price", () => {
+    const challenge = parseChallenge(
+      { "payment-required": b64({ x402Version: 2, accepts: [exactEntry("9007199254740991")] }) },
+      {}
+    );
+    expect(selectOffer(challenge).amountUnits).toBe(9007199254740991);
+  });
+});

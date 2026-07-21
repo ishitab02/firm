@@ -136,7 +136,24 @@ function priceUnits(entry: AcceptsEntry): number {
       `accepts entry has no base-unit integer price (amount/maxAmountRequired), got ${JSON.stringify(raw)}`
     );
   }
-  return Number(raw);
+
+  // Every cap comparison downstream is a JS number. Past 2^53-1 those stop
+  // being exact, so `Number(raw)` would quietly hand the caps a value that is
+  // not the amount the vendor asked for — and the signature covers the vendor's
+  // original string, not our rounded copy.
+  //
+  // At 6 decimals this is unreachable (9e9 USDT). At 18 it is 0.009 tokens, so
+  // it stops being theoretical the moment anyone adds an 18-decimal asset.
+  // Refusing costs nothing today and removes the class; converting the whole
+  // money path to bigint is the real fix and not a three-days-out change.
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) {
+    throw new X402Error(
+      "UNSUPPORTED_CHALLENGE",
+      `accepts entry price ${raw} exceeds the safe integer range; refusing rather than comparing a rounded amount`
+    );
+  }
+  return value;
 }
 
 /**
