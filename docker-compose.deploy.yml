@@ -1,0 +1,143 @@
+# The full Firm stack, as it must run to be a listable OKX agent.
+#
+#   docker compose -f docker-compose.deploy.yml --env-file .env.deploy up -d --build
+#
+# Four processes, and all four are load-bearing:
+#   db        state, checkpoints, the spend ledger and the idempotency keys
+#   procurer  the only component with a key; pays vendors, refunds buyers
+#   worker    claims paid jobs and runs the graph to a deliverable
+#   gateway   the public endpoint OKX calls; takes payment, creates jobs
+#
+# Deploying the gateway alone is the failure everyone makes here: it will accept
+# payment and then return PENDING forever, because nothing is working the job.
+#
+# Only the gateway publishes a port. The procurer deliberately does not: anything
+# that can reach /pay-and-call can spend the Firm's money up to the caps, so it
+# stays on the internal network behind PROCURER_AUTH_TOKEN.
+#
+# See docs/firm/DEPLOY.md for the full runbook, including the OKX x402-check
+# validation step that must pass BEFORE the listing is submitted.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: firm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.deploy}
+      POSTGRES_DB: firm
+    volumes:
+      - firm-deploy-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U firm -d firm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # No published port. Nothing outside this stack needs the database, and
+    # publishing it is how a dev Postgres ends up on the public internet.
+
+  # Runs once, to completion, before anything that reads the schema.
+  #
+  # The worker owns the firm_jobs / vendor_performance migrations and nothing
+  # applies them implicitly: the gateway creates only its own tables, and the
+  # worker assumes its own already exist. Without this step the stack comes up
+  # looking healthy and the worker crash-loops on `relation "firm_jobs" does
+  # not exist`, which from outside is indistinguishable from a job that never
+  # gets picked up. Found by running the stack, not by reading it.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/firm/Dockerfile
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://firm:${POSTGRES_PASSWORD}@db:5432/firm
+    command: ["firm-worker", "migrate"]
+
+  procurer:
+    build:
+      context: .
+      dockerfile: packages/procurer/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://firm:${POSTGRES_PASSWORD}@db:5432/firm
+      HOST: 0.0.0.0
+      PORT: 8787
+      PROCURER_AUTH_TOKEN: ${PROCURER_AUTH_TOKEN:?set PROCURER_AUTH_TOKEN in .env.deploy}
+      # Money switches. Both default to off, and off means simulated — a
+      # simulated run is clearly labelled everywhere it appears.
+      REAL_PAYMENTS_ENABLED: ${REAL_PAYMENTS_ENABLED:-false}
+      REAL_REFUNDS_ENABLED: ${REAL_REFUNDS_ENABLED:-false}
+      # The key. Never baked into the image, never in the repo.
+      FIRM_WALLET_KEY: ${FIRM_WALLET_KEY:-}
+      PER_CALL_MAX_UNITS: ${PER_CALL_MAX_UNITS:-}
+      PER_TASK_MAX_UNITS: ${PER_TASK_MAX_UNITS:-}
+      DAILY_MAX_UNITS: ${DAILY_MAX_UNITS:-}
+      DAILY_REFUND_MAX_UNITS: ${DAILY_REFUND_MAX_UNITS:-}
+      X402_ALLOWED_ASSETS: ${X402_ALLOWED_ASSETS:-}
+      REFUND_CHAIN: ${REFUND_CHAIN:-}
+      REFUND_TOKEN_CONTRACT: ${REFUND_TOKEN_CONTRACT:-}
+    expose:
+      - "8787"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/firm/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      procurer:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://firm:${POSTGRES_PASSWORD}@db:5432/firm
+      PROCURER_URL: http://procurer:8787
+      PROCURER_AUTH_TOKEN: ${PROCURER_AUTH_TOKEN}
+      VENDOR_INDEX_PATH: ${VENDOR_INDEX_PATH:-/app/data/vendor-index.json}
+      FIRM_PRICING_MODE: ${FIRM_PRICING_MODE:-TIERS}
+      ENABLE_TREASURY_BOOKS: ${ENABLE_TREASURY_BOOKS:-false}
+      DEFAULT_REFUND_ADDRESS: ${DEFAULT_REFUND_ADDRESS:-SIMULATED:refund-address}
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/firm-gateway/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://firm:${POSTGRES_PASSWORD}@db:5432/firm
+      HOST: 0.0.0.0
+      PORT: 8790
+      # enforce or the process refuses to bind a public interface, because a
+      # public gateway in bypass mode does unlimited paid work for free while
+      # still paying vendors out of our wallet.
+      CHARGING_MODE: ${CHARGING_MODE:-enforce}
+      FIRM_PAYTO_ADDRESS: ${FIRM_PAYTO_ADDRESS:?set FIRM_PAYTO_ADDRESS in .env.deploy}
+      FIRM_CHARGE_ASSET: ${FIRM_CHARGE_ASSET:?set FIRM_CHARGE_ASSET in .env.deploy}
+      FIRM_CHARGE_NETWORK: ${FIRM_CHARGE_NETWORK:?set FIRM_CHARGE_NETWORK in .env.deploy}
+      # Unset means every paid call fails closed. That is correct and it also
+      # means the paid path is untested until a real facilitator is configured.
+      X402_FACILITATOR_URL: ${X402_FACILITATOR_URL:-}
+      PRICING_MODE: ${PRICING_MODE:-TIERS}
+      EXPRESS_ENABLED: ${EXPRESS_ENABLED:-false}
+      EXPRESS_JOB_TYPES: ${EXPRESS_JOB_TYPES:-market_snapshot}
+      EXPRESS_PRICE_UNITS: ${EXPRESS_PRICE_UNITS:-100000}
+    ports:
+      - "${GATEWAY_PUBLIC_PORT:-8790}:8790"
+
+volumes:
+  firm-deploy-db:

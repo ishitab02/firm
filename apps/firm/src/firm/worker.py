@@ -66,7 +66,7 @@ async def run_one(
 
     resolved_vendors = vendors if vendors is not None else load_vendor_index(Path(settings.vendor_index_path))
     performance = PostgresPerformanceStore(settings.database_url)
-    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url)
+    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url, auth_token=settings.procurer_auth_token)
     completed = await run_task(task, resolved_vendors, store, performance, resolved_procurer)
     return WorkerResult(claimed=True, task=completed)
 
@@ -84,7 +84,7 @@ async def run_task_by_id(
 
     resolved_vendors = vendors if vendors is not None else load_vendor_index(Path(settings.vendor_index_path))
     performance = PostgresPerformanceStore(settings.database_url)
-    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url)
+    resolved_procurer = procurer if procurer is not None else HttpProcurer(settings.procurer_url, auth_token=settings.procurer_auth_token)
     completed = await run_task(task, resolved_vendors, store, performance, resolved_procurer)
     return WorkerResult(claimed=True, task=completed)
 

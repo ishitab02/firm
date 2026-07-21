@@ -2,6 +2,7 @@ import http from "node:http";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
+import { bearerFailure } from "./auth.js";
 import { capsFromEnv } from "./caps.js";
 import {
   ensureTables,
@@ -53,6 +54,16 @@ const vetSchema = vetCandidateSchema
 
 function realPaymentsEnabled(): boolean {
   return process.env.REAL_PAYMENTS_ENABLED === "true";
+}
+
+function authToken(): string | undefined {
+  const token = process.env.PROCURER_AUTH_TOKEN;
+  return token && token.length > 0 ? token : undefined;
+}
+
+/** Returns null when the request may proceed, or the reason it may not. */
+function authFailure(req: http.IncomingMessage): string | null {
+  return bearerFailure(req.headers.authorization, authToken());
 }
 
 function allowedAssets(): string[] | undefined {
@@ -323,6 +334,14 @@ const server = http.createServer(async (req, res) => {
       send(res, 405, { error: "METHOD_NOT_ALLOWED" });
       return;
     }
+    // Everything below this point can spend money or read the spend ledger.
+    // /health and /caps above are deliberately open: they carry no secrets and
+    // a container healthcheck needs them.
+    const denied = authFailure(req);
+    if (denied) {
+      send(res, 401, { ok: false, error_code: "UNAUTHORIZED", detail: denied });
+      return;
+    }
     const body = await readJson(req);
     if (req.url === "/pay-and-call") {
       send(res, 200, await handlePayAndCall(body));
@@ -342,7 +361,32 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(Number(process.env.PORT ?? 8787), "127.0.0.1", () => {
+/**
+ * The procurer is a spending API: anything that can reach /pay-and-call can
+ * move the Firm's money, up to the caps. On a laptop that is fine, because it
+ * only ever listens on loopback. In a container it has to be reachable by the
+ * worker over the compose network, and then "whoever can reach it" is no longer
+ * just us.
+ *
+ * So a non-loopback bind requires PROCURER_AUTH_TOKEN, and refuses to start
+ * without one. Loopback keeps working with no token, so nothing about local
+ * development changes.
+ */
+const host = process.env.HOST ?? "127.0.0.1";
+const port = Number(process.env.PORT ?? 8787);
+const isPublicBind = host !== "127.0.0.1" && host !== "localhost" && host !== "::1";
+
+if (isPublicBind && !authToken()) {
+  console.error(
+    `[procurer] refusing to bind ${host} without PROCURER_AUTH_TOKEN. Anything that can reach ` +
+      "/pay-and-call can spend the Firm's money up to the caps; on a non-loopback interface that " +
+      "must be authenticated. Bind 127.0.0.1 for local use, or set a token."
+  );
+  process.exit(1);
+}
+
+server.listen(port, host, () => {
   const mode = realPaymentsEnabled() ? "REAL PAYMENTS ENABLED" : "simulation only";
-  console.log(`firm-procurer listening on http://127.0.0.1:${process.env.PORT ?? 8787} (${mode})`);
+  const auth = authToken() ? "token required" : "loopback only, no token";
+  console.log(`firm-procurer listening on http://${host}:${port} (${mode}, ${auth})`);
 });

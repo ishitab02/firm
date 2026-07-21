@@ -506,8 +506,33 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(Number(process.env.PORT ?? 8790), "127.0.0.1", () => {
-  console.log(`firm-gateway listening on http://127.0.0.1:${process.env.PORT ?? 8790}`);
+/**
+ * Bind address. Defaults to loopback, which is the safe default for a laptop
+ * and the wrong one for a container: `docker run -p 8790:8790` publishes the
+ * host port to the container's external interface, so a process listening only
+ * on the container's loopback answers nothing. That is exactly the symptom OKX
+ * reported when they rejected Treasury — "unable to reach your Agent's service
+ * endpoint" — so it has to be settable. The Dockerfile sets HOST=0.0.0.0.
+ */
+const host = process.env.HOST ?? "127.0.0.1";
+const port = Number(process.env.PORT ?? 8790);
+const isPublicBind = host === "0.0.0.0" || host === "::";
+
+// A publicly-reachable gateway in bypass mode does unlimited paid work for
+// free, hiring real vendors with the Firm's own wallet on every request. That
+// is a money-loss bug wearing a config-mistake costume, so it is refused rather
+// than warned about. ALLOW_PUBLIC_BYPASS exists for deliberate staging runs.
+if (isPublicBind && chargingMode() === "bypass" && process.env.ALLOW_PUBLIC_BYPASS !== "true") {
+  console.error(
+    `[charging] refusing to bind ${host}: CHARGING_MODE is "bypass", so every paid tool would run ` +
+      "unpaid while still spending real money on vendors. Set CHARGING_MODE=enforce, or " +
+      "ALLOW_PUBLIC_BYPASS=true if you genuinely mean to serve free work."
+  );
+  process.exit(1);
+}
+
+server.listen(port, host, () => {
+  console.log(`firm-gateway listening on http://${host}:${port}`);
   if (chargingMode() === "bypass") {
     console.warn(
       "[charging] CHARGING_MODE is not \"enforce\": paid tools will run WITHOUT payment. " +
