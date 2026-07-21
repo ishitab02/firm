@@ -196,3 +196,51 @@ def test_buyer_constraints_reach_sourcing_and_filter_vendors() -> None:
     # Every candidate was rejected by the score floor, none hired.
     assert [r.reason for r in completed.provenance.vendors_rejected]
     assert completed.provenance.hires == []
+
+
+def test_vendor_args_sends_job_params_verbatim_when_supplied():
+    """A vendor with a real schema must receive the buyer's params, not prose.
+
+    Payment happens before the vendor validates the body, so a generic shape is
+    not a soft failure — it is a paid-for 400.
+    """
+    from firm.graph import _vendor_args
+    from firm.models import FirmTask, Money, PlanItem, Quote
+    from datetime import datetime, timedelta, timezone
+
+    quote = Quote(
+        quote_id="q_x",
+        price=Money.usdt(500_000),
+        plan_summary=[PlanItem(subtask="snapshot", capability="market_snapshot")],
+        valid_until=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    subtask = quote.plan_summary[0]
+
+    # OKLink #2023's real documented schema.
+    oklink_params = {"chainIndex": "1", "address": "0x0000000000000000000000000000000000000000", "height": "21000000"}
+    task = FirmTask(task_id="t_x", goal="balance snapshot", quote=quote, params=oklink_params)
+    assert _vendor_args(task, subtask) == oklink_params
+    # No goal/subtask smuggled in alongside: the vendor gets exactly what was specified.
+    assert "goal" not in _vendor_args(task, subtask)
+
+    # With no params the previous generic shape is preserved, which is what the
+    # packages/mocks fixtures expect.
+    bare = FirmTask(task_id="t_y", goal="balance snapshot", quote=quote)
+    assert _vendor_args(bare, subtask) == {"goal": "balance snapshot", "subtask": "snapshot"}
+
+
+def test_firm_task_params_round_trip_through_postgres(tmp_path):
+    """params must survive the job row, or the worker sends {} to a paid vendor."""
+    from firm.models import FirmTask, Money, PlanItem, Quote
+    from datetime import datetime, timedelta, timezone
+
+    quote = Quote(
+        quote_id="q_rt",
+        price=Money.usdt(500_000),
+        plan_summary=[PlanItem(subtask="snapshot", capability="market_snapshot")],
+        valid_until=datetime.now(timezone.utc) + timedelta(minutes=15),
+    )
+    task = FirmTask(task_id="t_rt", goal="g", quote=quote, params={"chainIndex": "1"})
+    # Model round trip is the part that is pure; the DB round trip is covered by
+    # the live worker evals.
+    assert FirmTask.model_validate(task.model_dump(mode="json")).params == {"chainIndex": "1"}

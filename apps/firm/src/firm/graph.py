@@ -145,7 +145,7 @@ async def _procure_subtask(
             PayAndCallRequest(
                 vendor_endpoint=vendor.endpoint,
                 tool=service.tool,
-                args={"goal": task.goal, "subtask": subtask.subtask},
+                args=_vendor_args(task, subtask),
                 max_amount=service.price,
                 task_id=task.task_id,
                 subtask_id=subtask.subtask,
@@ -333,6 +333,26 @@ def build_graph() -> Any:
     graph.add_edge("refunding", "booking")
     graph.add_edge("booking", END)
     return graph.compile()
+
+
+def _vendor_args(task: FirmTask, subtask: Any) -> dict[str, Any]:
+    """The request body to send a vendor for this subtask.
+
+    When the job supplies params, they are sent verbatim and alone. Real
+    marketplace vendors have real schemas, and the payment is made before the
+    vendor ever validates the body — so a generic shape is not a soft failure,
+    it is a paid-for 400. Sending exactly what the buyer specified is the only
+    thing we can do honestly; we cannot invent a body for a schema we have not
+    been told.
+
+    With no params, the previous generic shape is preserved. That is what the
+    vendor fixtures in packages/mocks expect, and a vendor that cannot parse it
+    fails validation and gets fired — which is the fallback loop working as
+    designed, just at the cost of one call.
+    """
+    if task.params:
+        return dict(task.params)
+    return {"goal": task.goal, "subtask": subtask.subtask}
 
 
 def _validation_reason(result: ValidationResult) -> str:

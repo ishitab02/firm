@@ -205,6 +205,14 @@ class FirmTask(BaseModel):
     task_id: str
     goal: str
     quote: Quote
+    #: The vendor-specific request body for this job. Real vendors have real
+    #: schemas, and payment happens before a vendor validates the body, so
+    #: sending a generic shape means paying for a 400.
+    #:
+    #: Buyer constraints deliberately do NOT live here — they ride on
+    #: `quote.constraints`, because they are quoted against. One source of
+    #: truth; do not add a second.
+    params: dict[str, Any] = Field(default_factory=dict)
     state: JobState = JobState.PLANNING
     progress: list[ProgressItem] = Field(default_factory=list)
     deliverable: dict[str, Any] | None = None

@@ -225,11 +225,21 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
       express: true,
       buyer_address: buyerAddress
     };
+    // params reach the vendor verbatim. INTERFACES §1A defines express_run as
+    // taking them, and real vendors have real schemas — OKLink requires
+    // chainIndex/address/height. Parsing them and dropping them, as this did,
+    // meant the worker sent a generic body and The Firm paid for the 400.
     await pool().query(
       `INSERT INTO firm_jobs
-       (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
-       VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
-      [taskId, jobQuote.quote_id, `Firm Express: ${parsed.data.job_type}`, JSON.stringify(jobQuote)]
+       (task_id, quote_id, state, goal, quote, params, progress, deliverable, provenance, refund)
+       VALUES ($1, $2, 'paid', $3, $4::jsonb, $5::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
+      [
+        taskId,
+        jobQuote.quote_id,
+        `Firm Express: ${parsed.data.job_type}`,
+        JSON.stringify(jobQuote),
+        JSON.stringify(parsed.data.params ?? {})
+      ]
     );
 
     // A worker (firm-worker run) processes the paid job; poll for the terminal

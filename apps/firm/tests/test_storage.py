@@ -25,17 +25,19 @@ class FakeCursor:
                 state,
                 goal,
                 quote,
+                job_params,
                 progress,
                 deliverable,
                 provenance,
                 refund,
-            ) = params[:9]
+            ) = params[:10]
             self.database["firm_jobs"][task_id] = {
                 "task_id": task_id,
                 "quote_id": quote_id,
                 "state": state,
                 "goal": goal,
                 "quote": unwrap_jsonb(quote),
+                "params": unwrap_jsonb(job_params),
                 "progress": unwrap_jsonb(progress),
                 "deliverable": unwrap_jsonb(deliverable),
                 "provenance": unwrap_jsonb(provenance),
