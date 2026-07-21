@@ -7,6 +7,7 @@ import {
   ChargingNotConfigured,
   encodeRequirements,
   encodeSettlement,
+  facilitatorUrlFor,
   paymentHeaderFrom,
   sellerConfigFromEnv,
   settlePayment,
@@ -63,6 +64,30 @@ describe("seller configuration", () => {
     process.env.FIRM_CHARGE_ASSET = "0xAAAA";
     process.env.FIRM_CHARGE_NETWORK = "eip155:196";
     expect(sellerConfigFromEnv()).toMatchObject({ payTo: "0xfirm", asset: "0xAAAA" });
+  });
+});
+
+describe("facilitatorUrlFor", () => {
+  // OKX's facilitator lives under a path prefix, and `new URL("/verify", base)`
+  // drops it — a leading slash resets to the root. Every call would have gone
+  // to https://web3.okx.com/verify, and the failure would have read as "the
+  // facilitator rejected us" rather than "we called a URL that does not exist".
+  it("preserves a path prefix on the base URL", () => {
+    expect(facilitatorUrlFor("https://web3.okx.com/api/v6/pay/x402", "verify")).toBe(
+      "https://web3.okx.com/api/v6/pay/x402/verify"
+    );
+    expect(facilitatorUrlFor("https://web3.okx.com/api/v6/pay/x402", "settle")).toBe(
+      "https://web3.okx.com/api/v6/pay/x402/settle"
+    );
+  });
+
+  it("tolerates a trailing slash and a leading slash on the route", () => {
+    expect(facilitatorUrlFor("https://host/api/", "verify")).toBe("https://host/api/verify");
+    expect(facilitatorUrlFor("https://host/api", "/verify")).toBe("https://host/api/verify");
+  });
+
+  it("still works for a bare host, which is what the local fake uses", () => {
+    expect(facilitatorUrlFor("http://127.0.0.1:9999", "settle")).toBe("http://127.0.0.1:9999/settle");
   });
 });
 

@@ -29,6 +29,21 @@ export type ChargeSpec = {
   description: string;
 };
 
+/**
+ * Join a facilitator base URL with a route, preserving any path on the base.
+ *
+ * `new URL("/verify", "https://host/api/v6/pay/x402")` returns
+ * `https://host/verify` — a leading slash resets to the root and silently drops
+ * the prefix. OKX's facilitator lives under `/api/v6/pay/x402`, so the naive
+ * join pointed every verify and settle call at a path that does not exist, and
+ * the failure would have looked like "the facilitator rejected us" rather than
+ * "we called the wrong URL".
+ */
+export function facilitatorUrlFor(base: string, route: string): string {
+  const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
+  return `${trimmed}/${route.replace(/^\//, "")}`;
+}
+
 export type PaymentRequirements = {
   x402Version: number;
   accepts: Array<Record<string, unknown>>;
@@ -106,7 +121,7 @@ export async function verifyPayment(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
   try {
-    const response = await fetch(new URL("/verify", options.facilitatorUrl).toString(), {
+    const response = await fetch(facilitatorUrlFor(options.facilitatorUrl, "verify"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] }),
@@ -186,7 +201,7 @@ export async function settlePayment(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
   try {
-    const response = await fetch(new URL("/settle", options.facilitatorUrl).toString(), {
+    const response = await fetch(facilitatorUrlFor(options.facilitatorUrl, "settle"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] }),
