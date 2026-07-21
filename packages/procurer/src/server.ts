@@ -66,11 +66,26 @@ function authFailure(req: http.IncomingMessage): string | null {
   return bearerFailure(req.headers.authorization, authToken());
 }
 
-function allowedAssets(): string[] | undefined {
-  const raw = process.env.X402_ALLOWED_ASSETS;
+function envList(name: string): string[] | undefined {
+  const raw = process.env[name];
   if (!raw) return undefined;
   const list = raw.split(",").map((entry) => entry.trim()).filter(Boolean);
   return list.length > 0 ? list : undefined;
+}
+
+/** Token contracts the procurer may pay in. */
+function allowedAssets(): string[] | undefined {
+  return envList("X402_ALLOWED_ASSETS");
+}
+
+/**
+ * CAIP-2 chains the procurer may pay on. As load-bearing as the asset list:
+ * "15 units of token X" is meaningless without the chain, so an attacker who
+ * deploys a familiar-looking contract address on a chain we never meant to
+ * touch would otherwise clear an asset-only allow-list.
+ */
+function allowedNetworks(): string[] | undefined {
+  return envList("X402_ALLOWED_NETWORKS");
 }
 
 async function readJson(req: http.IncomingMessage): Promise<unknown> {
@@ -165,6 +180,11 @@ async function handlePayAndCall(body: unknown) {
       {
         signer: realSigner(),
         allowedAssets: allowedAssets(),
+        allowedNetworks: allowedNetworks(),
+        // Real money is moving, so the asset's scale must be known before we
+        // sign — declared by the vendor, or pinned by the allow-lists above,
+        // which are mandatory in this mode.
+        requireKnownDecimals: true,
         decimals: request.max_amount.decimals,
         token: request.max_amount.token,
         timeoutMs: Number(process.env.VENDOR_TIMEOUT_MS ?? 60_000),
@@ -375,6 +395,21 @@ const server = http.createServer(async (req, res) => {
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 8787);
 const isPublicBind = host !== "127.0.0.1" && host !== "localhost" && host !== "::1";
+
+// Both allow-lists are optional in simulation and mandatory once real money can
+// move. An empty asset list means "pay in whatever the vendor names"; an empty
+// network list means "on whatever chain it names". Together those turn a
+// malicious 402 into a signature for an asset we never intended to hold, and
+// the cap arithmetic cannot see the difference because base units are just
+// integers. Refuse at startup rather than mid-payment.
+if (realPaymentsEnabled() && (!allowedAssets() || !allowedNetworks())) {
+  console.error(
+    "[procurer] refusing to start with REAL_PAYMENTS_ENABLED=true and no X402_ALLOWED_ASSETS " +
+      "or X402_ALLOWED_NETWORKS. Without both, a vendor chooses which asset and which chain we " +
+      "sign for, and a base-unit cap check cannot tell the difference."
+  );
+  process.exit(1);
+}
 
 if (isPublicBind && !authToken()) {
   console.error(

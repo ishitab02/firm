@@ -118,6 +118,54 @@ describe("selectOffer", () => {
     expect(() => selectOffer(challenge, { allowedAssets: ["0xCCCC"] })).toThrow(/asset-allowed/);
   });
 
+  // An asset allow-list alone is not enough. A contract at a familiar-looking
+  // address on a chain we never meant to touch is a different asset entirely,
+  // and the cap arithmetic cannot see the difference: base units are integers.
+  it("honours the network allow-list, so a right-looking asset on a wrong chain is refused", () => {
+    const challenge = parseChallenge(
+      {
+        "payment-required": b64({
+          x402Version: 2,
+          accepts: [
+            exactEntry("50000", { asset: "0xAAAA", network: "eip155:1" }),
+            exactEntry("100000", { asset: "0xAAAA", network: "eip155:196" })
+          ]
+        })
+      },
+      {}
+    );
+
+    // The cheapest entry is on the wrong chain, so the allow-list must filter
+    // BEFORE the cheapest is picked — otherwise the whole challenge is refused
+    // even though a payable entry exists.
+    const offer = selectOffer(challenge, { allowedNetworks: ["eip155:196"] });
+    expect(offer.network).toBe("eip155:196");
+    expect(offer.amountUnits).toBe(100000);
+
+    expect(() => selectOffer(challenge, { allowedNetworks: ["eip155:8453"] })).toThrow(/network-allowed/);
+  });
+
+  it("applies the asset and network allow-lists together", () => {
+    const challenge = parseChallenge(
+      {
+        "payment-required": b64({
+          x402Version: 2,
+          accepts: [
+            exactEntry("10", { asset: "0xBBBB", network: "eip155:196" }),
+            exactEntry("20", { asset: "0xAAAA", network: "eip155:1" }),
+            exactEntry("30", { asset: "0xAAAA", network: "eip155:196" })
+          ]
+        })
+      },
+      {}
+    );
+
+    const offer = selectOffer(challenge, { allowedAssets: ["0xAAAA"], allowedNetworks: ["eip155:196"] });
+    expect(offer.amountUnits).toBe(30);
+    expect(offer.asset).toBe("0xAAAA");
+    expect(offer.network).toBe("eip155:196");
+  });
+
   it("refuses an entry whose price is not a base-unit integer", () => {
     const challenge = parseChallenge(
       { "payment-required": b64({ x402Version: 2, accepts: [exactEntry("0.5")] }) },

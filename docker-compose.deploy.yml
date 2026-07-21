@@ -81,7 +81,10 @@ services:
       PER_TASK_MAX_UNITS: ${PER_TASK_MAX_UNITS:-}
       DAILY_MAX_UNITS: ${DAILY_MAX_UNITS:-}
       DAILY_REFUND_MAX_UNITS: ${DAILY_REFUND_MAX_UNITS:-}
+      # Both required when REAL_PAYMENTS_ENABLED=true; the procurer will not
+      # start without them.
       X402_ALLOWED_ASSETS: ${X402_ALLOWED_ASSETS:-}
+      X402_ALLOWED_NETWORKS: ${X402_ALLOWED_NETWORKS:-}
       REFUND_CHAIN: ${REFUND_CHAIN:-}
       REFUND_TOKEN_CONTRACT: ${REFUND_TOKEN_CONTRACT:-}
     expose:

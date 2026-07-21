@@ -153,23 +153,37 @@ function priceUnits(entry: AcceptsEntry): number {
  */
 export function selectOffer(
   challenge: X402Challenge,
-  options: { allowedAssets?: string[] } = {}
+  options: { allowedAssets?: string[]; allowedNetworks?: string[] } = {}
 ): SelectedOffer {
   if (challenge.accepts.length === 0) {
     throw new X402Error("UNSUPPORTED_CHALLENGE", "challenge carried an empty accepts[] array");
   }
 
+  // Both allow-lists filter *before* the cheapest entry is chosen, rather than
+  // checking the winner afterwards. A challenge that offers a disallowed asset
+  // alongside an allowed one should be payable on the allowed one; rejecting
+  // the whole challenge because the cheapest entry happened to be the bad one
+  // would refuse business we can legitimately do.
+  //
+  // The network list matters as much as the asset list. "15 units of token X"
+  // means nothing without knowing which chain token X is on: an attacker who
+  // deploys a contract at a familiar-looking address on a chain we never meant
+  // to touch gets a signature for an asset we never meant to hold.
   const allowed = options.allowedAssets?.map((asset) => asset.toLowerCase());
+  const networks = options.allowedNetworks?.map((network) => network.toLowerCase());
   const candidates = challenge.accepts
     .map((entry, acceptsIndex) => ({ entry, acceptsIndex }))
     .filter(({ entry }) => LOCAL_SIGNABLE_SCHEMES.includes(String(entry.scheme) as never))
-    .filter(({ entry }) => !allowed || allowed.includes(String(entry.asset).toLowerCase()));
+    .filter(({ entry }) => !allowed || allowed.includes(String(entry.asset).toLowerCase()))
+    .filter(({ entry }) => !networks || networks.includes(String(entry.network).toLowerCase()));
 
   if (candidates.length === 0) {
-    const offered = challenge.accepts.map((entry) => `${entry.scheme}/${entry.asset}`).join(", ");
+    const offered = challenge.accepts
+      .map((entry) => `${entry.scheme}/${entry.asset}@${entry.network}`)
+      .join(", ");
     throw new X402Error(
       "UNSUPPORTED_CHALLENGE",
-      `no accepts entry is both locally signable (${LOCAL_SIGNABLE_SCHEMES.join("|")}) and asset-allowed; vendor offered: ${offered}`
+      `no accepts entry is locally signable (${LOCAL_SIGNABLE_SCHEMES.join("|")}), asset-allowed and network-allowed; vendor offered: ${offered}`
     );
   }
 

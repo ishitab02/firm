@@ -81,6 +81,15 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
   }
 }
 
+/**
+ * True when the caller has named both the assets and the networks it will pay
+ * on. selectOffer filters against both, so an offer that got this far under
+ * both lists is an asset the caller chose, not one the vendor proposed.
+ */
+function bothAllowListsConfigured(options: { allowedAssets?: string[]; allowedNetworks?: string[] }): boolean {
+  return Boolean(options.allowedAssets?.length && options.allowedNetworks?.length);
+}
+
 async function readBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return {};
@@ -106,6 +115,14 @@ export async function payAndCallVendor(
     decimals: number;
     token: string;
     allowedAssets?: string[];
+    allowedNetworks?: string[];
+    /**
+     * Require the asset's decimal scale to be KNOWN before signing — either
+     * declared by the vendor, or pinned by having both allow-lists configured.
+     * Set whenever real money can move. Off in simulation, where nothing is at
+     * stake and the mock vendors are not all well-formed.
+     */
+    requireKnownDecimals?: boolean;
     timeoutMs?: number;
   }
 ): Promise<VendorCallOutcome> {
@@ -148,7 +165,10 @@ export async function payAndCallVendor(
   let challenge;
   try {
     challenge = parseChallenge(headerBag(probe), await readBody(probe));
-    offer = selectOffer(challenge, { allowedAssets: options.allowedAssets });
+    offer = selectOffer(challenge, {
+      allowedAssets: options.allowedAssets,
+      allowedNetworks: options.allowedNetworks
+    });
   } catch (error) {
     if (error instanceof X402Error) return { ok: false, error_code: error.errorCode, detail: error.message };
     throw error;
@@ -167,6 +187,34 @@ export async function payAndCallVendor(
       detail:
         `vendor prices in ${offer.declaredDecimals} decimals but max_amount is in ${options.decimals}; ` +
         "refusing to compare base units across different scales"
+    };
+  }
+
+  // An offer that declares no scale at all is the same hazard wearing a
+  // friendlier face: `15 <= 15` passes whether those 15 units are 0.000015 USDT
+  // or 15 units of something wei-scaled.
+  //
+  // The obvious fix — demand a declared scale whenever real money moves — is
+  // wrong here, and measurably so. Of the 47 live x402 vendors on this
+  // marketplace, 41 declare no `extra.decimals`, including OKLink #2023, the
+  // vendor both G1 and G2 actually paid. That rule would cut the hireable pool
+  // to six and break the payment path that already works.
+  //
+  // What the check is really for is not knowing the scale. So require the
+  // scale to be *known*, not *declared*: an undeclared scale is safe exactly
+  // when the asset and network are both explicitly allow-listed, because then
+  // the scale is a fact about a token we chose in advance rather than a claim
+  // the vendor is making. USD₮0 on X Layer is 6 decimals whether or not the
+  // seller says so. selectOffer has already refused anything outside both
+  // lists, so reaching here with both configured means the asset is one we
+  // named ourselves.
+  if (offer.declaredDecimals === null && options.requireKnownDecimals && !bothAllowListsConfigured(options)) {
+    return {
+      ok: false,
+      error_code: "UNSUPPORTED_CHALLENGE",
+      detail:
+        "vendor declared no decimal scale and the asset is not on a configured asset+network " +
+        `allow-list, so ${options.decimals} decimals would be an assumption rather than a fact`
     };
   }
 
