@@ -1,6 +1,7 @@
 import pg from "pg";
 
 import { assertAggregateCaps, assertPerCall, assertRefundCap, Caps } from "./caps.js";
+import { units } from "./money.js";
 
 const { Pool } = pg;
 
@@ -144,11 +145,23 @@ export type ReserveOutcome =
  * admit one that would not.
  */
 export async function reserveCall(
-  request: { idempotencyKey: string; taskId: string; subtaskId: string; vendorEndpoint: string; ceiling: unknown },
-  ceilingUnits: number,
+  request: {
+    idempotencyKey: string;
+    taskId: string;
+    subtaskId: string;
+    vendorEndpoint: string;
+    ceiling: { amount: string; decimals: number; token: string };
+  },
   caps: Caps,
   mode: SpendMode
 ): Promise<ReserveOutcome> {
+  // Derived here, not passed in. This used to take a separate ceilingUnits
+  // argument: cap arithmetic used the number, the row persisted the object, and
+  // nothing enforced that they described the same amount. Production always
+  // derived both from max_amount so they agreed, but a caller passing a ceiling
+  // of 0 with units of 50,000 would pass every cap check and then reserve
+  // nothing — silently under-claiming budget on money code. One source, no gap.
+  const ceilingUnits = units(request.ceiling);
   return withTransaction<ReserveOutcome>(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock($1)", [SPEND_LOCK_ID]);
 
@@ -301,10 +314,11 @@ export type RefundOutcome =
  * atomically, under the same lock the spend path uses.
  */
 export async function reserveRefund(
-  request: { taskId: string; toAddress: string; amount: unknown },
-  amountUnits: number,
+  request: { taskId: string; toAddress: string; amount: { amount: string; decimals: number; token: string } },
   caps: Caps
 ): Promise<RefundOutcome> {
+  // Derived, for the same reason as reserveCall above.
+  const amountUnits = units(request.amount);
   return withTransaction<RefundOutcome>(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock($1)", [SPEND_LOCK_ID]);
 

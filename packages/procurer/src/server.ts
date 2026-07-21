@@ -106,7 +106,6 @@ async function handlePayAndCall(body: unknown) {
       vendorEndpoint: request.vendor_endpoint,
       ceiling: request.max_amount
     },
-    ceilingUnits,
     caps,
     realPaymentsEnabled() ? "real" : "simulated"
   );
@@ -196,7 +195,6 @@ async function handleRefund(body: unknown) {
 
   const reservation = await reserveRefund(
     { taskId: request.task_id, toAddress: request.to_address, amount: request.amount },
-    amountUnits,
     caps
   );
 

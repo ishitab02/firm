@@ -124,35 +124,35 @@ suite("procurer reservations", () => {
       // real run.
       const tight = { ...caps, dailyMax: 100_000 };
       const sim = { ...call("test_modes_sim", "s0"), ceiling: usdt(100_000) };
-      expect((await reserveCall(sim, 100_000, tight, "simulated")).kind).toBe("reserved");
+      expect((await reserveCall(sim, tight, "simulated")).kind).toBe("reserved");
 
       // The real ledger is untouched by that, so a real call of the full daily
       // budget still fits.
       const real = { ...call("test_modes_real", "s0"), ceiling: usdt(100_000) };
-      expect((await reserveCall(real, 100_000, tight, "real")).kind).toBe("reserved");
+      expect((await reserveCall(real, tight, "real")).kind).toBe("reserved");
     });
 
     it("real spend does not consume the simulated budget either", async () => {
       const tight = { ...caps, dailyMax: 100_000 };
-      expect((await reserveCall({ ...call("test_modes_r2", "s0"), ceiling: usdt(100_000) }, 100_000, tight, "real")).kind).toBe("reserved");
-      expect((await reserveCall({ ...call("test_modes_s2", "s0"), ceiling: usdt(100_000) }, 100_000, tight, "simulated")).kind).toBe("reserved");
+      expect((await reserveCall({ ...call("test_modes_r2", "s0"), ceiling: usdt(100_000) }, tight, "real")).kind).toBe("reserved");
+      expect((await reserveCall({ ...call("test_modes_s2", "s0"), ceiling: usdt(100_000) }, tight, "simulated")).kind).toBe("reserved");
     });
 
     it("refuses to replay a simulated receipt for a real request", async () => {
       // Returning a SIMULATED receipt to a real caller would look exactly like a
       // completed payment that never happened.
       const request = { ...call("test_modes_mix", "s0"), ceiling: usdt(50_000) };
-      expect((await reserveCall(request, 50_000, caps, "simulated")).kind).toBe("reserved");
+      expect((await reserveCall(request, caps, "simulated")).kind).toBe("reserved");
       await settleCall(request.idempotencyKey, usdt(50_000), { ok: true, receipt: { tx: "SIMULATED:pay:x" } });
 
-      const asReal = await reserveCall(request, 50_000, caps, "real");
+      const asReal = await reserveCall(request, caps, "real");
       expect(asReal).toMatchObject({ kind: "needs_human" });
       expect((asReal as { detail: string }).detail).toMatch(/simulated and real/);
     });
 
     it("reports the two ledgers separately so simulated never reads as money", async () => {
       const before = await spendSnapshot();
-      const outcome = await reserveCall({ ...call("test_modes_snap", "s0"), ceiling: usdt(70_000) }, 70_000, caps, "simulated");
+      const outcome = await reserveCall({ ...call("test_modes_snap", "s0"), ceiling: usdt(70_000) }, caps, "simulated");
       expect(outcome.kind).toBe("reserved");
       const after = await spendSnapshot();
 
@@ -161,11 +161,28 @@ suite("procurer reservations", () => {
     });
   });
 
+  it("reserves exactly the ceiling it was given, with no second source of truth", async () => {
+    // reserveCall used to take a separate ceilingUnits argument: cap arithmetic
+    // used the number, the row persisted the object, and nothing enforced that
+    // they described the same amount. A caller passing a ceiling of 0 with units
+    // of 50,000 cleared every cap and then reserved nothing. The units are now
+    // derived from the ceiling, so that call is no longer expressible — this
+    // test pins that what is checked is what is persisted.
+    const request = { ...call("test_single_source", "s0"), ceiling: usdt(50_000) };
+    expect((await reserveCall(request, caps, "real")).kind).toBe("reserved");
+
+    const row = await pool().query(
+      "SELECT (reserved_amount->>'amount')::bigint AS reserved FROM procurer_calls WHERE idempotency_key = $1",
+      [request.idempotencyKey]
+    );
+    expect(Number(row.rows[0].reserved)).toBe(50_000);
+  });
+
   it("admits exactly one of two concurrent requests for the same subtask", async () => {
     const request = { ...call("test_idem", "s1"), ceiling: usdt(50_000) };
     const [first, second] = await Promise.all([
-      reserveCall(request, 50_000, caps, "real"),
-      reserveCall(request, 50_000, caps, "real")
+      reserveCall(request, caps, "real"),
+      reserveCall(request, caps, "real")
     ]);
 
     const kinds = [first.kind, second.kind].sort();
@@ -180,7 +197,7 @@ suite("procurer reservations", () => {
       ceiling: usdt(50_000)
     }));
 
-    const outcomes = await Promise.all(requests.map((request) => reserveCall(request, 50_000, caps, "real")));
+    const outcomes = await Promise.all(requests.map((request) => reserveCall(request, caps, "real")));
     const admitted = outcomes.filter((outcome) => outcome.kind === "reserved").length;
 
     expect(admitted).toBe(5);
@@ -199,7 +216,7 @@ suite("procurer reservations", () => {
       ceiling: usdt(100_000)
     }));
 
-    const outcomes = await Promise.all(requests.map((request) => reserveCall(request, 100_000, caps, "real")));
+    const outcomes = await Promise.all(requests.map((request) => reserveCall(request, caps, "real")));
     const admitted = outcomes.filter((outcome) => outcome.kind === "reserved").length;
 
     expect(admitted).toBe(5); // 5 x 100k = the 500k daily cap exactly.
@@ -208,7 +225,7 @@ suite("procurer reservations", () => {
   });
 
   it("rejects a single call above the per-call cap before it reserves anything", async () => {
-    const outcome = await reserveCall({ ...call("test_percall", "s0"), ceiling: usdt(100_001) }, 100_001, caps, "real");
+    const outcome = await reserveCall({ ...call("test_percall", "s0"), ceiling: usdt(100_001) }, caps, "real");
     expect(outcome).toMatchObject({ kind: "cap_exceeded", detail: /per-call/ });
 
     const rows = await pool().query("SELECT 1 FROM procurer_calls WHERE task_id = 'test_percall'");
@@ -217,48 +234,48 @@ suite("procurer reservations", () => {
 
   it("replays a settled receipt instead of paying twice", async () => {
     const request = { ...call("test_replay", "s0"), ceiling: usdt(50_000) };
-    expect((await reserveCall(request, 50_000, caps, "real")).kind).toBe("reserved");
+    expect((await reserveCall(request, caps, "real")).kind).toBe("reserved");
 
     const receipt = { ok: true, receipt: { tx: "0xrecorded" } };
     await settleCall(request.idempotencyKey, usdt(50_000), receipt);
 
-    const repeat = await reserveCall(request, 50_000, caps, "real");
+    const repeat = await reserveCall(request, caps, "real");
     expect(repeat).toEqual({ kind: "replay", response: receipt });
   });
 
   it("refuses to sign a second authorization when the first one's fate is unknown", async () => {
     const request = { ...call("test_signed", "s0"), ceiling: usdt(50_000) };
-    await reserveCall(request, 50_000, caps, "real");
+    await reserveCall(request, caps, "real");
     await markSigned(request.idempotencyKey);
 
-    const repeat = await reserveCall(request, 50_000, caps, "real");
+    const repeat = await reserveCall(request, caps, "real");
     expect(repeat).toMatchObject({ kind: "needs_human" });
   });
 
   it("frees the cap budget when a call fails before signing", async () => {
     const request = { ...call("test_release", "s0"), ceiling: usdt(100_000) };
-    await reserveCall(request, 100_000, caps, "real");
+    await reserveCall(request, caps, "real");
     await releaseCall(request.idempotencyKey, { ok: false, error_code: "VENDOR_TIMEOUT" });
 
     const snapshot = await spendSnapshot();
     expect(snapshot.spent_today).toBe(0);
 
     // ...and the same key can be retried.
-    expect((await reserveCall(request, 100_000, caps, "real")).kind).toBe("reserved");
+    expect((await reserveCall(request, caps, "real")).kind).toBe("reserved");
   });
 
   it("reclaims a reservation left behind by a procurer that died mid-call", async () => {
     const request = { ...call("test_stale", "s0"), ceiling: usdt(50_000) };
-    expect((await reserveCall(request, 50_000, caps, "real")).kind).toBe("reserved");
+    expect((await reserveCall(request, caps, "real")).kind).toBe("reserved");
     // A fresh reservation still blocks a concurrent caller.
-    expect((await reserveCall(request, 50_000, caps, "real")).kind).toBe("in_flight");
+    expect((await reserveCall(request, caps, "real")).kind).toBe("in_flight");
 
     await pool().query(
       "UPDATE procurer_calls SET updated_at = now() - interval '2 hours' WHERE idempotency_key = $1",
       [request.idempotencyKey]
     );
 
-    expect((await reserveCall(request, 50_000, caps, "real")).kind).toBe("reserved");
+    expect((await reserveCall(request, caps, "real")).kind).toBe("reserved");
     // Reclaimed, not duplicated: the budget is still one call's worth.
     const snapshot = await spendSnapshot();
     expect(snapshot.spent_today).toBe(50_000);
@@ -266,19 +283,19 @@ suite("procurer reservations", () => {
 
   it("never reclaims a signed row, however old", async () => {
     const request = { ...call("test_stale_signed", "s0"), ceiling: usdt(50_000) };
-    await reserveCall(request, 50_000, caps, "real");
+    await reserveCall(request, caps, "real");
     await markSigned(request.idempotencyKey);
     await pool().query(
       "UPDATE procurer_calls SET updated_at = now() - interval '30 days' WHERE idempotency_key = $1",
       [request.idempotencyKey]
     );
 
-    expect(await reserveCall(request, 50_000, caps, "real")).toMatchObject({ kind: "needs_human" });
+    expect(await reserveCall(request, caps, "real")).toMatchObject({ kind: "needs_human" });
   });
 
   it("does not free the budget for a call that already signed", async () => {
     const request = { ...call("test_no_release", "s0"), ceiling: usdt(100_000) };
-    await reserveCall(request, 100_000, caps, "real");
+    await reserveCall(request, caps, "real");
     await markSigned(request.idempotencyKey);
     await releaseCall(request.idempotencyKey, { ok: false, error_code: "VENDOR_TIMEOUT" });
 
@@ -315,7 +332,6 @@ suite("procurer refunds", () => {
     await seedJob("test_refund_ok", 100_000);
     const outcome = await reserveRefund(
       { taskId: "test_refund_ok", toAddress: "0xuser", amount: usdt(100_000) },
-      100_000,
       caps
     );
     expect(outcome.kind).toBe("reserved");
@@ -325,7 +341,6 @@ suite("procurer refunds", () => {
     await seedJob("test_refund_over", 100_000);
     const outcome = await reserveRefund(
       { taskId: "test_refund_over", toAddress: "0xuser", amount: usdt(100_001) },
-      100_001,
       caps
     );
     expect(outcome).toMatchObject({ kind: "requires_human", detail: /exceeds the task's quoted price/ });
@@ -334,7 +349,6 @@ suite("procurer refunds", () => {
   it("requires a human when there is no quote to bound the refund", async () => {
     const outcome = await reserveRefund(
       { taskId: "test_refund_unknown", toAddress: "0xuser", amount: usdt(1) },
-      1,
       caps
     );
     expect(outcome).toMatchObject({ kind: "requires_human", detail: /no quoted price on record/ });
@@ -349,7 +363,6 @@ suite("procurer refunds", () => {
       Array.from({ length: 4 }, (_, index) =>
         reserveRefund(
           { taskId: `test_refund_daily_${index}`, toAddress: "0xuser", amount: usdt(100_000) },
-          100_000,
           caps
         )
       )
@@ -361,12 +374,11 @@ suite("procurer refunds", () => {
 
   it("replays a settled refund instead of sending a second transfer", async () => {
     await seedJob("test_refund_replay", 100_000);
-    await reserveRefund({ taskId: "test_refund_replay", toAddress: "0xuser", amount: usdt(50_000) }, 50_000, caps);
+    await reserveRefund({ taskId: "test_refund_replay", toAddress: "0xuser", amount: usdt(50_000) }, caps);
     await settleRefund("test_refund_replay", { tx: "0xrefund" });
 
     const repeat = await reserveRefund(
       { taskId: "test_refund_replay", toAddress: "0xuser", amount: usdt(50_000) },
-      50_000,
       caps
     );
     expect(repeat).toEqual({ kind: "replay", response: { tx: "0xrefund" } });
