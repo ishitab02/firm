@@ -1,5 +1,10 @@
 # Deploying The Firm — runbook
 
+> **LIVE as of 2026-07-21.** `https://firm-gateway.fly.dev` is deployed and
+> `onchainos agent x402-check` returns `valid: true` against it. The stack runs
+> on Fly (`sin`) with Neon Postgres (`ap-southeast-1`). Everything below is the
+> procedure that produced it, kept so it can be reproduced or moved.
+
 Getting a public HTTPS endpoint that passes OKX's own validator, so the listing
 can be submitted with the reachability question already answered rather than
 discovered during review.
