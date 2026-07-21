@@ -16,9 +16,10 @@ import {
   spendSnapshot
 } from "./db.js";
 import { units } from "./money.js";
-import { executeRefund, realRefundsEnabled } from "./refund.js";
+import { executeRefund, realRefundsEnabled, refundMode } from "./refund.js";
 import { realSigner } from "./signer.js";
 import { payAndCallVendor } from "./vendor.js";
+import { vetVendors } from "./vet.js";
 
 const money = z.object({ amount: z.string(), decimals: z.number(), token: z.string() });
 const payAndCallSchema = z.object({
@@ -34,6 +35,21 @@ const refundSchema = z.object({
   to_address: z.string(),
   amount: money
 });
+const vetCandidateSchema = z.object({
+  vendor_endpoint: z.string(),
+  tool: z.string(),
+  args: z.record(z.unknown()).optional(),
+  listed_amount: money.optional(),
+  max_amount: money.optional()
+});
+/** Accepts one candidate inline, or a batch. Exactly one form must be present. */
+const vetSchema = vetCandidateSchema
+  .partial()
+  .extend({ candidates: z.array(vetCandidateSchema).min(1).optional() })
+  .refine(
+    (value) => Boolean(value.candidates) !== Boolean(value.vendor_endpoint && value.tool),
+    "provide either `candidates`, or `vendor_endpoint` + `tool`, but not both"
+  );
 
 function realPaymentsEnabled(): boolean {
   return process.env.REAL_PAYMENTS_ENABLED === "true";
@@ -209,7 +225,27 @@ async function handleRefund(body: unknown) {
     return { error_code: "REFUND_IN_FLIGHT", detail: "a refund for this task is already in flight" };
   }
 
-  if (!realRefundsEnabled()) {
+  const mode = refundMode({ realPayments: realPaymentsEnabled(), realRefunds: realRefundsEnabled() });
+
+  // Fails closed, and releases the reservation: nothing was refunded, so it must
+  // not keep holding against the daily refund cap. The detail carries the exact
+  // command a human can run — preparing it without firing it is the standing
+  // rule for real-money operations.
+  if (mode === "requires_human") {
+    const response = {
+      error_code: "REQUIRES_HUMAN",
+      detail:
+        `real payments are enabled but real refunds are not, so this refund was NOT sent. ` +
+        `Owed: ${request.amount.amount} base units of ${request.amount.token} to ${request.to_address} ` +
+        `for task ${request.task_id}. Send it manually, then set REAL_REFUNDS_ENABLED=true to close this path: ` +
+        `onchainos wallet send --recipient ${request.to_address} --amt ${amountUnits} ` +
+        `--chain $REFUND_CHAIN --contract-token $REFUND_TOKEN_CONTRACT --force`
+    };
+    await releaseRefund(request.task_id, response);
+    return response;
+  }
+
+  if (mode === "simulated") {
     const response = { tx: simulatedTx("refund", request.task_id) };
     await settleRefund(request.task_id, response);
     return response;
@@ -224,6 +260,45 @@ async function handleRefund(body: unknown) {
   const response = { tx: result.tx, detail: result.detail };
   await settleRefund(request.task_id, response);
   return response;
+}
+
+/**
+ * Vetting is free and never signs, so it deliberately does NOT go through the
+ * reservation or cap machinery — there is nothing to reserve. It is also not an
+ * authorisation: /pay-and-call re-reads the challenge and re-checks every cap
+ * against the amount it is about to sign, because a vendor can reprice between
+ * the probe and the call.
+ */
+async function handleVet(body: unknown) {
+  const request = vetSchema.parse(body);
+  const candidates = request.candidates ?? [
+    {
+      vendor_endpoint: request.vendor_endpoint!,
+      tool: request.tool!,
+      args: request.args,
+      listed_amount: request.listed_amount,
+      max_amount: request.max_amount
+    }
+  ];
+
+  const results = await vetVendors(
+    candidates.map((candidate) => ({
+      vendorEndpoint: candidate.vendor_endpoint,
+      tool: candidate.tool,
+      args: candidate.args,
+      listedAmount: candidate.listed_amount,
+      maxAmount: candidate.max_amount
+    })),
+    { allowedAssets: allowedAssets(), timeoutMs: Number(process.env.VET_TIMEOUT_MS ?? 10_000) }
+  );
+
+  return {
+    ok: true,
+    cost: "none — no payment was signed or sent for any probe",
+    vetted: results.length,
+    hireable: results.filter((result) => result.hireable).length,
+    results
+  };
 }
 
 await ensureTables();
@@ -255,6 +330,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.url === "/refund") {
       send(res, 200, await handleRefund(body));
+      return;
+    }
+    if (req.url === "/vet") {
+      send(res, 200, await handleVet(body));
       return;
     }
     send(res, 404, { error: "NOT_FOUND" });

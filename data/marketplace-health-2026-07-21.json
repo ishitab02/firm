@@ -1,0 +1,2629 @@
+{
+  "generated_at": "2026-07-21T13:44:35.461Z",
+  "index": "data/marketplace-scan.json",
+  "capability": null,
+  "method": {
+    "probe": "one unpaid POST per agent; read whatever the endpoint answers",
+    "cost": "none — no payment was signed or sent for any probe",
+    "attempts": "up to 2, retried only on network-level failure",
+    "timeout_ms": 12000,
+    "population": "the FIRST endpoint-bearing service per agent, not every service",
+    "what_it_proves": "endpoint liveness, x402 conformance, and the price actually demanded",
+    "what_it_does_not_prove": "that a paid response is correct or useful; that an agent's OTHER services share this verdict"
+  },
+  "summary": {
+    "probed": 95,
+    "hireable": 54,
+    "dead_or_misrouted": 41,
+    "above_listing": 5,
+    "served_free": 7
+  },
+  "results": [
+    {
+      "agent_id": "1888",
+      "name": "Hunch Research",
+      "vendor_endpoint": "https://api.hunch.trade/feed",
+      "tool": "Hunch Discovery Search",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"error\":\"Not Found\",\"statusCode\":404}",
+      "latency_ms": 674,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "1",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2095",
+      "name": "项目研究所",
+      "vendor_endpoint": "https://okxai.hopea9.top/agent/project-dyor",
+      "tool": "Web3 项目 DYOR 报告",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 887,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:988",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x9c12fc93fac00cf20c884cf7c2666a33d7fe4828",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2143",
+      "name": "Predexon",
+      "vendor_endpoint": "https://a2mcp.predexon.com/v1/markets/search",
+      "tool": "Predexon Market Search",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"error\":\"not_found\"}",
+      "latency_ms": 484,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5082",
+      "name": "Proof of Behavior",
+      "vendor_endpoint": "https://cerberus-production-9a57.up.railway.app/prove",
+      "tool": "BehaviorProof",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 24,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "5898",
+      "name": "PREX · 短线分析",
+      "vendor_endpoint": "https://prex.best/api/okx-ai/market-analysis",
+      "tool": "PREX单币单股短线分析",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 400: {\"success\":false,\"status\":\"input_required\",\"inputRequired\":true,\"error\":\"Input required before payment\",\"requiredArgs\":[\"symbol\",\"timeframe\",\"prompt\"],\"requiredAnyOf\":[],\"fields\":[{\"name\":\"symbol\",\"type\":\"string\",\"description\":\"交易标的，例如 BTCUSDT、ETHUSDT、AAPL 或 NVDA。\",\"required\":true},{\"name\":\"timefram",
+      "latency_ms": 882,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5047",
+      "name": "Argus",
+      "vendor_endpoint": "https://argus-agent-production-ab97.up.railway.app/okx/scan",
+      "tool": "Multi-Agent Contract Audit",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 125,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "3733",
+      "name": "Scope",
+      "vendor_endpoint": "https://scope-production-b104.up.railway.app/api/analyze",
+      "tool": "Wallet Health & Story Report",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 24,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "300000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "2567",
+      "name": "EdgePulse CN",
+      "vendor_endpoint": "https://smart-money-edge.diwymr1.workers.dev/okx-mcp",
+      "tool": "事件市场信号扫描",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 356,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      "declared_decimals": 6,
+      "pay_to": "0x77903169b2a95222050d668fec3fe04711beb3af",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5311",
+      "name": "LiquidityDesk",
+      "vendor_endpoint": "https://api.mucvan.com/api/liquidity-board",
+      "tool": "Execution Liquidity Board",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 376,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x3256c679ac5ebc0a34a60d5f40a64f4813168d69",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3837",
+      "name": "OKB Monitoring",
+      "vendor_endpoint": "https://okb.swaper.money/x402/digest",
+      "tool": "Daily anomaly digest",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 990,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x0921f7fcbc93984c2a4d29b4079f97840184365b",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6234",
+      "name": "Scope Guard Agent Safety",
+      "vendor_endpoint": "https://scopeguard-api-production.up.railway.app/api/v1/asp/analyze",
+      "tool": "Agent Action Risk Auditor",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 3,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "5127",
+      "name": "EdgeProof",
+      "vendor_endpoint": "https://api.mucvan.com/api/funding-flip-backtest",
+      "tool": "Funding Flip Backtest",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 150000 base units via exact",
+      "latency_ms": 372,
+      "live_amount": {
+        "amount": "150000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "150000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3601",
+      "name": "CollabShield",
+      "vendor_endpoint": "https://collabshield.vercel.app/api/verify",
+      "tool": "PR Code Auditor",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 400: {\"ok\":false,\"error\":\"Missing required parameters\",\"message\":\"Request must include taskSpec (markdown) and prUrl (GitHub URL).\"}",
+      "latency_ms": 794,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5149",
+      "name": "Serenity 美股瓶颈与收益研报",
+      "vendor_endpoint": "https://erenity-yield-hunter-production.up.railway.app/mcp/us-yield-hunter",
+      "tool": "US Market Scan",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 5,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "5077",
+      "name": "DeepBrief",
+      "vendor_endpoint": "https://api.mucvan.com/api/token-dossier",
+      "tool": "Token Dossier",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 50000 base units via exact",
+      "latency_ms": 222,
+      "live_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4990",
+      "name": "TapeRead",
+      "vendor_endpoint": "https://api.mucvan.com/api/taker-flow",
+      "tool": "Taker Flow Gauge",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 673,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2940",
+      "name": "Lyra",
+      "vendor_endpoint": "https://aureagent.fun/agents/lyra/tokenomics-model",
+      "tool": "Tokenomics Model Report",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 500000 base units via exact",
+      "latency_ms": 279,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x35bf0421D8B50EC075b33Ea4E27a1B457C6c5927",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3089",
+      "name": "fold",
+      "vendor_endpoint": "https://x402.fold.computer/exec",
+      "tool": "fold exec",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 534,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:8453",
+      "asset": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+      "declared_decimals": null,
+      "pay_to": "0x033cee18d34668aa39db203228eb277ef9c023c8",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5812",
+      "name": "TORTILLA Flow Intel",
+      "vendor_endpoint": "https://tortilla.mahakala.uk/asp/v1/tortilla/flow-brief",
+      "tool": "TORTILLA Flow Brief",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 405: {\"detail\":\"Method Not Allowed\"}",
+      "latency_ms": 573,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2392",
+      "name": "Icarus-AI miner",
+      "vendor_endpoint": "https://api.januscfd.xyz/polymarket-analysis",
+      "tool": "Polymarket Market Intel",
+      "verdict": "NO_CHARGE",
+      "hireable": true,
+      "detail": "vendor served without issuing a payment challenge",
+      "latency_ms": 381,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4848",
+      "name": "美股 · Alpha猎手",
+      "vendor_endpoint": "https://usstocksite.vercel.app/api/catalyst-radar",
+      "tool": "美股热点利好雷达",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 633,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": 6,
+      "pay_to": "0xbdfe1d54bb70480667e2406fb12ace8fa078fa8c",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4137",
+      "name": "ASP赛道情报 · NicheScope",
+      "vendor_endpoint": "https://asp-intel.kyomio.top/intel",
+      "tool": "ASP赛道竞争情报",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /intel</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 612,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5010",
+      "name": "QuantPulse Daily",
+      "vendor_endpoint": "https://aimcp.clawmama.run/market-report",
+      "tool": "Market Intelligence Report",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 2990000 base units via exact",
+      "latency_ms": 529,
+      "live_amount": {
+        "amount": "2990000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "2990000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xe8fb62154382af0812539cfe61b48321d8f846a8",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3824",
+      "name": "链上研究解析助手",
+      "vendor_endpoint": "https://direct-api-jp.lylshien.com/okx-mcp/mcp",
+      "tool": "链上研究资料解析器",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 50000 base units via exact",
+      "latency_ms": 529,
+      "live_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": 6,
+      "pay_to": "0x1bcbde870df5af7215987e8db00a207a2317bd79",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4287",
+      "name": "TRUTH-PROTOCOL",
+      "vendor_endpoint": "https://mcp.holdot.top/v1/scan/token",
+      "tool": "代币合约风险扫描服务",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 50000 base units via exact",
+      "latency_ms": 212,
+      "live_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": 6,
+      "pay_to": "0x297ccc6ee6f3352da55ec93452f59947ac10a976",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4835",
+      "name": "RouteRiskFirewall",
+      "vendor_endpoint": "https://osodiq325-routerisk-asp.hf.space/mcp",
+      "tool": "SwapRouteSafetyCheck",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /mcp</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 1048,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5540",
+      "name": "DoraFusion AI",
+      "vendor_endpoint": "https://okxaiagent.vercel.app/mcp",
+      "tool": "Fusion Strategy Analysis",
+      "verdict": "NO_CHARGE",
+      "hireable": true,
+      "detail": "vendor served without issuing a payment challenge",
+      "latency_ms": 654,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3130",
+      "name": "链眼",
+      "vendor_endpoint": "https://okx.188158.xyz/score",
+      "tool": "代币智能评分引擎",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 405: {\"detail\":\"Method Not Allowed\"}",
+      "latency_ms": 605,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "2000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3191",
+      "name": "SignalLens AI",
+      "vendor_endpoint": "https://npx-skills-add-okx-onchainos-skills.vercel.app/api/score",
+      "tool": "Ticker 技术扫描服务",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 405: {\"error\":\"method_not_allowed\",\"message\":\"Use GET /api/score?ticker=NVDA\"}",
+      "latency_ms": 636,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5128",
+      "name": "CycleProof",
+      "vendor_endpoint": "https://api.mucvan.com/api/weekday-seasonality",
+      "tool": "Weekday Seasonality",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 150000 base units via exact",
+      "latency_ms": 178,
+      "live_amount": {
+        "amount": "150000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "150000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5191",
+      "name": "SetupProof",
+      "vendor_endpoint": "https://api.mucvan.com/api/ma-cross-backtest",
+      "tool": "MA Cross Backtest",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 150000 base units via exact",
+      "latency_ms": 164,
+      "live_amount": {
+        "amount": "150000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "150000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5781",
+      "name": "Prism AI",
+      "vendor_endpoint": "https://prism-ai-theta.vercel.app/api/analyze",
+      "tool": "Token Analysis",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 400: {\"success\":false,\"error\":\"Symbol required\"}",
+      "latency_ms": 828,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5234",
+      "name": "Quorum",
+      "vendor_endpoint": "https://quorom.online/v1/analyze",
+      "tool": "Consensus TA Score",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 300000 base units via exact",
+      "latency_ms": 745,
+      "live_amount": {
+        "amount": "300000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "300000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2d5d5dd4fa50da336baf6c4651b1145f9c6e3cdc",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4609",
+      "name": "OnchainAI",
+      "vendor_endpoint": "https://www.onchain-ai.xyz/mcp/okx",
+      "tool": "OnchainAI MCP",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 503: {\"raw\":\"The deployment is currently unavailable\\n\\nDEPLOYMENT_PAUSED\\n\\nbom1::qsdvm-1784641470658-a877798890ad\\n\"}",
+      "latency_ms": 136,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4462",
+      "name": "MacroLens",
+      "vendor_endpoint": "https://api.mucvan.com/api/fear-greed",
+      "tool": "Fear Greed Index History",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 199,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2080",
+      "name": "MarketBrew Stock Agent",
+      "vendor_endpoint": "https://okx-mcp.themarketbrew.com/api/okx-mcp/market-data",
+      "tool": "Market Data Context",
+      "verdict": "PRICE_MISMATCH",
+      "hireable": true,
+      "detail": "listed 30000 but the live 402 demands 100000 (3.3333x)",
+      "latency_ms": 466,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "30000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 3.3333,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x98ef71730ea795c5f092eec110cf1143e72ec403",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6260",
+      "name": "Argus",
+      "vendor_endpoint": "https://argus.lykan.website/scan",
+      "tool": "Quick Risk Verdict",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /scan</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 914,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5996",
+      "name": "RugCheck AI",
+      "vendor_endpoint": "https://rugcheck-asp.onrender.com/mcp",
+      "tool": "AI Token Risk Report",
+      "verdict": "NO_CHARGE",
+      "hireable": true,
+      "detail": "vendor served without issuing a payment challenge",
+      "latency_ms": 382,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4683",
+      "name": "草台班子",
+      "vendor_endpoint": "https://api.ctbz.lol/mcp",
+      "tool": "草台班子检测器",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 406: {\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"Not Acceptable: Client must accept both application/json and text/event-stream\"},\"id\":null}",
+      "latency_ms": 382,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2562",
+      "name": "VortexMarketAnalysis",
+      "vendor_endpoint": "https://customer-chevy-vitality.ngrok-free.dev",
+      "tool": "Market Data API",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /tools/Market%20Data%20API</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 1421,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5005",
+      "name": "DeepReview",
+      "vendor_endpoint": "https://review.asplab.dev/review",
+      "tool": "AI Code Review",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 1195,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xa035d3710d17fd342cf5a16a52e54fc6c181153e",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5055",
+      "name": "港股打新 · Alpha雷达",
+      "vendor_endpoint": "https://hkipoalpha.vercel.app/api/ipo-alpha",
+      "tool": "港股打新综合评分",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 503: {\"ok\":false,\"error\":\"paid_service_suspended\",\"message\":\"申购模型与真实支付结算尚未达到上线门槛，当前不接受付款。\",\"researchEndpoint\":\"/api/ipo-alpha-free\"}",
+      "latency_ms": 686,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4980",
+      "name": "Covered Call Copilot",
+      "vendor_endpoint": "https://cc-copilot-9h6k.onrender.com/v1/cc/health",
+      "tool": "CC Health Diagnostics",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 50000 base units via exact",
+      "latency_ms": 202,
+      "live_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      "declared_decimals": null,
+      "pay_to": "0x3ca501d2cded2fb414c5a766372260ac783cd792",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4605",
+      "name": "ChainKun",
+      "vendor_endpoint": "https://chainkun-api.vercel.app/api/divination",
+      "tool": "Trigram Matrix Divination",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /api/divination</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 664,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3706",
+      "name": "爆款内容方法论",
+      "vendor_endpoint": "https://onchainos-skills-production-7119.up.railway.app/m/viral-content/mcp",
+      "tool": "爆款内容策略分析",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 6,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "300000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "2100",
+      "name": "预测市场眼",
+      "vendor_endpoint": "https://okxai.hopea9.top/agent/prediction-market-brief",
+      "tool": "预测市场动向分析",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 200000 base units via exact",
+      "latency_ms": 248,
+      "live_amount": {
+        "amount": "200000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "200000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:988",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x9c12fc93fac00cf20c884cf7c2666a33d7fe4828",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4203",
+      "name": "DailyDigest",
+      "vendor_endpoint": "https://daily-digest.95-217-163-4.nip.io/manifest",
+      "tool": "每日加密摘要",
+      "verdict": "NO_CHARGE",
+      "hireable": true,
+      "detail": "vendor served without issuing a payment challenge",
+      "latency_ms": 589,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2721",
+      "name": "rootAI",
+      "vendor_endpoint": "https://mcp.rootedge.ai/pro/okx",
+      "tool": "Graded Hyperliquid Signals",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 924,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x09F2830636F2Edf71F7cA929dCC20cC1F161C897",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3369",
+      "name": "WhalePulse Analytics",
+      "vendor_endpoint": "https://detective.codepilot-ai.com/api/v1/scan/token",
+      "tool": "WhalePulse Scanner",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 500000 base units via exact",
+      "latency_ms": 799,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x7cee5510116af91ee721a23ee41e63edc41c9fc4",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3619",
+      "name": "易经六爻占事",
+      "vendor_endpoint": "https://asp.yijing.cyou/divine",
+      "tool": "决策辅助",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 500000 base units via exact",
+      "latency_ms": 819,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x0F31fb50C4c5f77397937b0b310b9362B1f3991C",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5012",
+      "name": "Taco Boss",
+      "vendor_endpoint": "https://taco.yijing.cyou/divine/ask",
+      "tool": "Taco Boss 议题推演 v2",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 1000000 base units via exact",
+      "latency_ms": 718,
+      "live_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+      "declared_decimals": null,
+      "pay_to": "0x0F31fb50C4c5f77397937b0b310b9362B1f3991C",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4989",
+      "name": "DepthCharge",
+      "vendor_endpoint": "https://api.mucvan.com/api/slippage-estimate",
+      "tool": "Slippage Estimator",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 134,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6442",
+      "name": "Token DD Desk",
+      "vendor_endpoint": "https://169-58-8-62.sslip.io/api/dd-quick",
+      "tool": "Quick Token Risk Scan",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 405: {\"detail\":\"Method Not Allowed\"}",
+      "latency_ms": 564,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4537",
+      "name": "VenueScan",
+      "vendor_endpoint": "https://api.mucvan.com/api/cex-rankings",
+      "tool": "CEX Trust Rankings",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 167,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5069",
+      "name": "HashWatch",
+      "vendor_endpoint": "https://api.mucvan.com/api/mining-pools",
+      "tool": "Mining Pool Dominance",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 141,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2e8e85c1089c53ba04dabb47439c2fd1235652d8",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3646",
+      "name": "Eastern Face Reading",
+      "vendor_endpoint": "https://easternfiveelements.com/mcp",
+      "tool": "Five Elements Face Reading API",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 1000000 base units via exact",
+      "latency_ms": 1058,
+      "live_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "1000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xaaf2cabae6fd5d283b4701ffa8f7406def4d3522",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4045",
+      "name": "鲸迹研判",
+      "vendor_endpoint": "https://prediction-radar-mcp.vercel.app/mcp",
+      "tool": "预测市场地址画像引擎",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 50000 base units via exact",
+      "latency_ms": 685,
+      "live_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x22086aabe52814916de2fa084c51a3cca72101f0",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5169",
+      "name": "Alpha Radar",
+      "vendor_endpoint": "https://alpharadar.congge918.xyz/api/research",
+      "tool": "Alpha Radar Research API",
+      "verdict": "PRICE_MISMATCH",
+      "hireable": true,
+      "detail": "listed 100000 but the live 402 demands 500000 (5x)",
+      "latency_ms": 717,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 5,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xaea3d8fa693b72df26022922fd4d5b3efd1de504",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5628",
+      "name": "Meridian Signal",
+      "vendor_endpoint": "https://crypto-pulse.43.163.102.132.sslip.io/market/brief",
+      "tool": "Hourly Market Brief",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"ok\":false,\"error\":\"not_found\"}",
+      "latency_ms": 210,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3991",
+      "name": "坐标智研",
+      "vendor_endpoint": "https://github-readme-score-a2mcp-production.up.railway.app/score",
+      "tool": "GitHub README Quality Score",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 7,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "5939",
+      "name": "宏观速递 · MacroPulse",
+      "vendor_endpoint": "https://macro.aiunue.dpdns.org/market-overview",
+      "tool": "加密市场概况",
+      "verdict": "NO_CHARGE",
+      "hireable": true,
+      "detail": "vendor served without issuing a payment challenge",
+      "latency_ms": 537,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2301",
+      "name": "Onchain Alpha Lab",
+      "vendor_endpoint": "https://mcp.onchainalphamcp.link/mcp",
+      "tool": "链上 Alpha 项目洞察",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 406: {\"jsonrpc\":\"2.0\",\"id\":\"server-error\",\"error\":{\"code\":-32600,\"message\":\"Not Acceptable: Client must accept application/json\"}}",
+      "latency_ms": 793,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "60000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5805",
+      "name": "AlphaChef Signal Feed",
+      "vendor_endpoint": "https://alphachef.site/api/mcp/signals",
+      "tool": "Crypto Signal Alerts",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /api/mcp/signals</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 621,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5977",
+      "name": "QuantRefine",
+      "vendor_endpoint": "https://35-240-253-6.sslip.io/a2mcp/validate",
+      "tool": "交易策略快速验证",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 500000 base units via exact",
+      "latency_ms": 342,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x4ae46a509f6b1d9056937ba4500cb143933d2dc8",
+      "declared_decimals": 6,
+      "pay_to": "0x4ed11c510c3aca4e90dca941b11ddeaf3fede325",
+      "schemes_offered": [
+        "exact",
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5524",
+      "name": "API2ASP Factory",
+      "vendor_endpoint": "https://api2asp-factory.vercel.app/api/v1/analyze-openapi",
+      "tool": "OpenAPI ASP Analysis",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 761,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x7db2bcac1b61b5a9eb906b3c22c81200998fb8cc",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5557",
+      "name": "Pitchook",
+      "vendor_endpoint": "https://pitchook.xyz/v1/x402/agent",
+      "tool": "Managed Agent Task Execution",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 699,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779dEd0c9e1022225f8E0630b35a9b54BE713736",
+      "declared_decimals": 6,
+      "pay_to": "0xa06ec7302917c4bd51c521330ec970629b4e047f",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3118",
+      "name": "CoinWM Open API",
+      "vendor_endpoint": "https://api.coinwm.com/api/services/x-tweet-detail",
+      "tool": "X 单条推文详情查询",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"error\":\"Not found\"}",
+      "latency_ms": 963,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "3000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2626",
+      "name": "X API MCP",
+      "vendor_endpoint": "https://xapi.fastclaw.ink/mcp",
+      "tool": "X API MCP Access",
+      "verdict": "PRICE_MISMATCH",
+      "hireable": true,
+      "detail": "listed 500000 but the live 402 demands 900000 (1.8x)",
+      "latency_ms": 303,
+      "live_amount": {
+        "amount": "900000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1.8,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x6392D85531874dbae43C3C35429b2B3b8676Febe",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3590",
+      "name": "x402node",
+      "vendor_endpoint": "https://api.x402node.dev/okx/finance/forex",
+      "tool": "Realtime Forex Rates",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /okx/finance/forex</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 756,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "8000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2917",
+      "name": "MarketContext API",
+      "vendor_endpoint": "https://market-context-api.market-context-api.workers.dev/context",
+      "tool": "Crypto Market Context Feed",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 405: {\"ok\":false,\"error\":\"method_not_allowed\"}",
+      "latency_ms": 491,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6142",
+      "name": "APA",
+      "vendor_endpoint": "https://apa-rosy-phi.vercel.app/api/cron",
+      "tool": "Auto-Pay Scheduling",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 0 base units via exact",
+      "latency_ms": 624,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x817e18b543d74adf688faaf3a1fc44647dd2abd5",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5175",
+      "name": "Lumora Stock Data Hub",
+      "vendor_endpoint": "https://us-stock-data-service-production.up.railway.app/v1/latest",
+      "tool": "US Stock Latest Minute Bars",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 8,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "2013",
+      "name": "CoinAnk OpenAPI",
+      "vendor_endpoint": "https://open-api.coinank.com/api/etf/getUsBtcEtf",
+      "tool": "US BTC ETF",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 1000 base units via exact",
+      "latency_ms": 217,
+      "live_amount": {
+        "amount": "1000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 0.1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x4ae46a509f6b1d9056937ba4500cb143933d2dc8",
+      "declared_decimals": null,
+      "pay_to": "0xb1257e75791baa36646113d8b1fdfc83b3e2d0b7",
+      "schemes_offered": [
+        "exact",
+        "exact",
+        "aggr_deferred",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2023",
+      "name": "Onchain Data Explorer",
+      "vendor_endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_contract_source",
+      "tool": "Verified Contract Source",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 75 base units via exact",
+      "latency_ms": 263,
+      "live_amount": {
+        "amount": "75",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "75",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xa7e37604ebab94408159e405033a455f820fd987",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3209",
+      "name": "Clawby",
+      "vendor_endpoint": "https://api.openclawby.com/x402/topup",
+      "tool": "Live Market Data API",
+      "verdict": "PRICE_MISMATCH",
+      "hireable": true,
+      "detail": "listed 5000 but the live 402 demands 3000000 (600x)",
+      "latency_ms": 704,
+      "live_amount": {
+        "amount": "3000000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "5000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 600,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x15ddde1a321400f4836e222c0e8b715ac1e3d942",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5314",
+      "name": "ExchangeFlowDesk",
+      "vendor_endpoint": "https://api.mucvan.com/api/exchange-board",
+      "tool": "Exchange Landscape Board",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 213,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "200000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 0.5,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x3256c679ac5ebc0a34a60d5f40a64f4813168d69",
+      "schemes_offered": [
+        "exact",
+        "aggr_deferred"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2652",
+      "name": "RitMEX",
+      "vendor_endpoint": "https://www.ritmex.one/x402/calendar",
+      "tool": "比特币黄历",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 405: {}",
+      "latency_ms": 803,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4636",
+      "name": "MacroPulse · 宏观市场脉搏",
+      "vendor_endpoint": "https://okxai.xujinyu.com/mcp/",
+      "tool": "Macro Dashboard Data API",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 406: {\"jsonrpc\":\"2.0\",\"id\":\"server-error\",\"error\":{\"code\":-32600,\"message\":\"Not Acceptable: Client must accept application/json\"}}",
+      "latency_ms": 1040,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4543",
+      "name": "健康生活",
+      "vendor_endpoint": "https://mcp.opcshop.xyz/mcp",
+      "tool": "AI饮食运动助手",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 406: {\"jsonrpc\":\"2.0\",\"id\":\"server-error\",\"error\":{\"code\":-32600,\"message\":\"Not Acceptable: Client must accept application/json\"}}",
+      "latency_ms": 290,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6706",
+      "name": "OutdoorWindow",
+      "vendor_endpoint": "https://outdoorwindow.seriouss.workers.dev/mcp",
+      "tool": "Find safe outdoor windows",
+      "verdict": "NO_CHARGE",
+      "hireable": true,
+      "detail": "vendor served without issuing a payment challenge",
+      "latency_ms": 262,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3762",
+      "name": "Web3 · 金融助手",
+      "vendor_endpoint": "https://a2a-endpoint.vercel.app",
+      "tool": "美股与加密币数据查询",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 500000 base units via exact",
+      "latency_ms": 1193,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x1E4a5963aBFD975d8c9021ce480b42188849D41d",
+      "declared_decimals": null,
+      "pay_to": "0xdc2018f3472d6fe50c899b9b29a83358ae02f4c7",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6707",
+      "name": "WhereWhen",
+      "vendor_endpoint": "https://wherewhen.seriouss.workers.dev/mcp",
+      "tool": "Places, time and workdays",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 500: {\"raw\":\"Internal Server Error\"}",
+      "latency_ms": 226,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3977",
+      "name": "Leo Labs",
+      "vendor_endpoint": "https://api.leolabs.me/world-cup-smart-money-radar",
+      "tool": "World Cup Smart Money Radar",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 100000 base units via exact",
+      "latency_ms": 373,
+      "live_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "100000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x1e1a2f7ac1bc6df29a1878c3f26b17dccdc16e15",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "6560",
+      "name": "SignalForge AI",
+      "vendor_endpoint": "https://signalforge-ai.onrender.com/analyze",
+      "tool": "Narrative Intelligence API",
+      "verdict": "PRICE_MISMATCH",
+      "hireable": true,
+      "detail": "listed 10000 but the live 402 demands 500000 (50x)",
+      "latency_ms": 443,
+      "live_amount": {
+        "amount": "500000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 50,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xe8f96910a685605a81864ca79904456df9112d59",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2364",
+      "name": "AxiomAI",
+      "vendor_endpoint": "https://linc.wang/api/axiomai",
+      "tool": "Axiom Oracle",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 6600000 base units via exact",
+      "latency_ms": 788,
+      "live_amount": {
+        "amount": "6600000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "6600000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x0bd1e06a16551915dee8ccc9203a055863fa0a19",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2134",
+      "name": "Predict Protocol",
+      "vendor_endpoint": "https://api.predictprotocol.app/x402/odds",
+      "tool": "Predict Odds API",
+      "verdict": "UNREACHABLE",
+      "hireable": false,
+      "detail": "fetch failed (2 attempts)",
+      "latency_ms": 11,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "300000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 2
+    },
+    {
+      "agent_id": "4171",
+      "name": "FindNextTrade",
+      "vendor_endpoint": "https://findnexttrade.onrender.com/api/agent/scan",
+      "tool": "Crypto Signal Scanner",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!doctype html>\\n<html lang=en>\\n<title>404 Not Found</title>\\n<h1>Not Found</h1>\\n<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>\\n\"}",
+      "latency_ms": 308,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4043",
+      "name": "ChainAlmanac",
+      "vendor_endpoint": "https://almanac.3-22-98-85.sslip.io/v1/almanac/today",
+      "tool": "Daily Onchain Almanac",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"404 Not Found\"}",
+      "latency_ms": 780,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "50000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3894",
+      "name": "Bit Monk",
+      "vendor_endpoint": "https://coin-signal.airblock2026.workers.dev/mcp",
+      "tool": "Crypto Top / Bottom, Signal",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 202: {}",
+      "latency_ms": 251,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "4611",
+      "name": "Wallet Health Report",
+      "vendor_endpoint": "https://okx-wallet-health-mcp.onrender.com/generate_wallet_health_report",
+      "tool": "生成可视化的钱包健康报告",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 336,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x9b396f49b5e784c4f17f2777532dcb0181a40d87",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5421",
+      "name": "PixelBrief",
+      "vendor_endpoint": "https://pixelbrief.tech/v1/brand-kit",
+      "tool": "Full brand kit",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /v1/brand-kit</pre>\\n</body>\\n</html>\\n\"}",
+      "latency_ms": 1145,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "250000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "5776",
+      "name": "ScoutGate",
+      "vendor_endpoint": "https://scoutgate-vercel-src.vercel.app/mcp",
+      "tool": "ASP Service Match",
+      "verdict": "NO_CHARGE",
+      "hireable": true,
+      "detail": "vendor served without issuing a payment challenge",
+      "latency_ms": 629,
+      "live_amount": {
+        "amount": "0",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    },
+    {
+      "agent_id": "3345",
+      "name": "这个能吃吗？",
+      "vendor_endpoint": "https://api.cliperx.com/food/analyze/image",
+      "tool": "食品健康评估，拍标签、测成份",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 10000 base units via exact",
+      "latency_ms": 794,
+      "live_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "10000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0xf33770bf8c9a772c489c482220c67b0a38ebee72",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2135",
+      "name": "Newsliquid",
+      "vendor_endpoint": "https://x402.6551.io/okx/news_type",
+      "tool": "OpenNews News Type",
+      "verdict": "X402_OK",
+      "hireable": true,
+      "detail": "live and conformant at 2000 base units via exact",
+      "latency_ms": 354,
+      "live_amount": {
+        "amount": "2000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "listed_amount": {
+        "amount": "2000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": 1,
+      "scheme": "exact",
+      "network": "eip155:196",
+      "asset": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      "declared_decimals": null,
+      "pay_to": "0x2ec31068d6451510841578981081124a0f75cc64",
+      "schemes_offered": [
+        "exact"
+      ],
+      "attempts": 1
+    },
+    {
+      "agent_id": "2012",
+      "name": "Barker Yield Agent",
+      "vendor_endpoint": "https://mcp.barker.money/barker_defi_vaults",
+      "tool": "Stablecoin Yield Radar",
+      "verdict": "HTTP_ERROR",
+      "hireable": false,
+      "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /barker_defi_vaults</pre>\\n<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML=\\\"win",
+      "latency_ms": 337,
+      "live_amount": null,
+      "listed_amount": {
+        "amount": "1000",
+        "decimals": 6,
+        "token": "USDT"
+      },
+      "price_ratio": null,
+      "scheme": null,
+      "network": null,
+      "asset": null,
+      "declared_decimals": null,
+      "pay_to": null,
+      "schemes_offered": [],
+      "attempts": 1
+    }
+  ]
+}
