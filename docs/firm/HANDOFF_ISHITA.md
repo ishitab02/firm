@@ -1,5 +1,9 @@
 # Handoff to Ishita — 2026-07-21
 
+> **NEWER HANDOFF BELOW — see "Handoff to Ishita — 2026-07-22" at the end of
+> this file. It is time-critical and supersedes the ACTION items here. Do the
+> 07-22 items first.**
+
 From: Poulav (F1/F2 lanes, via Claude Code)
 Branch: `f1/x402-live-money`, 30 commits, all pushed, tree clean.
 Tests: 147 green — 38 pytest, 65 procurer, 28 gateway, 10 firm-evals, 6 vendor-index.
@@ -238,3 +242,97 @@ generator, so I reverted it.
 - The LLM semantic rubric in INTERFACES §6 is a deterministic floor only
 - `check_liveness()` exists but is not wired into the flow
 - Multi-subtask jobs work in code but have never run against real vendors
+
+---
+---
+
+# Handoff to Ishita — 2026-07-22
+
+From: Poulav (F1, via Claude Code). Repo at `fa0e702`, pushed to `main`.
+Suites green: 88 pytest, 78 gateway, 121 procurer, ruff clean.
+
+**Everything below needs your account.** Poulav's CLI login
+(`bpoulav@gmail.com`) is bound to agent **5863 Treasury Copilot** — confirmed
+today by `onchainos agent gate-check`, and `task-in-progress --agent-ids 7138`
+answers `agent is not bound to the current user`. Nothing on `#7138` can be done
+from his side. That is correct access control, not a problem to route around.
+
+## Why this is urgent, stated plainly
+
+**A purchase against production right now reproduces David's round-2 rejection.**
+
+All three services are behind `main`:
+
+| service | deployed | current code | |
+|---|---|---|---|
+| procurer | 07:18Z | `6adac1b` 14:21Z | stale |
+| gateway | 10:28Z | `9fd2d24` 14:49Z | stale |
+| worker | 11:59Z | `9fd2d24` 14:49Z | stale |
+
+The deployed worker predates both the relevance validator (`2dfe852`) and the
+change that makes Express buy its data from OKLink (`6adac1b`). So an ETH
+request is still answered with BTC-ETF data — and without the relevance check it
+*passes* validation, so no refund fires either. Wrong answer, money kept. That is
+worse than failing.
+
+Confirmed today, not assumed: the deployed procurer's `/health` has no
+`refund_ready` field at all.
+
+## ACTION 1 — unlist or disable **Firm Express** now
+
+Before Poulav deploys, not after. The three services are mutually incompatible
+while the deployment runs, and Express is the only thing anyone can buy. A buyer
+arriving mid-window pays a live endpoint whose worker cannot serve them.
+
+Poulav cannot do this — it is your listing. It is the one item gating the
+deploy starting.
+
+## ACTION 2 — drop **Firm Projects** from `#7138`
+
+Permanently, not for the window. The listing should offer only what a reviewer
+can actually buy end to end today. Firm Projects is the free-quote-then-execute
+flow; it is not the thing that has been proven on real money, and leaving it
+listed invites a reviewer to test the path we are least able to defend.
+
+Express is the entry's demonstrable product: fixed 0.1 USDT, buys its price
+series from OKLink #2023 at 15 base units, returns the analysis, refunds
+automatically when it cannot deliver.
+
+## ACTION 3 — reconcile the stuck `accepted` task
+
+**Do not simply close it.** It is an unresolved financial record: settle the
+payment or refund it, then close. Closing an open money state without resolving
+it is exactly the thing this entry claims not to do, and it would be visible to
+anyone auditing the task history.
+
+If it needs a refund and you cannot trigger one from your side, say so and
+Poulav will run it through the procurer.
+
+## ACTION 4 — re-list Express, then request the re-test
+
+Only after Poulav confirms all three deployed and verified:
+
+- procurer `/health` reports `refund_ready: true` with gas headroom
+- GET and the documented flat POST both return 402
+- `x402-check` returns `valid: true`
+- one live ETH/4h purchase returns a relevant answer whose receipt names
+  OKLink #2023 at 15 units
+
+Then ask David to re-test. Not before — a third rejection on a finding we
+already fixed but had not shipped would be the worst available outcome.
+
+## One thing that may change the listing — wait for Poulav
+
+A private key for the Firm wallet `0xC029…50e0` was exposed, and rotating it is
+under consideration. **`payTo` in every 402 challenge is that address**, so
+rotation changes what the listing advertises. Do not submit or update listing
+copy containing the payment address until Poulav confirms the decision. Actions
+1–3 above are unaffected and should proceed now.
+
+## What Poulav still owes you
+
+- The three deploys, in order procurer -> worker -> gateway (blocked on Action 1
+  and the rotation decision).
+- The buyer wallet funded from an independent wallet — not the Firm's own, which
+  would make the purchase circular and inadmissible as evidence of a sale.
+- The live-purchase verification listed in Action 4.
