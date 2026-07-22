@@ -49,9 +49,10 @@ is a snapshot, and a re-run may differ.
 | Probed | 95 | 100% |
 | Reachable and x402-conformant | 47 | 49% |
 | Returned 200 without an x402 challenge | 7 | 7% |
-| **Dead or misrouted** | **41** | **43%** |
+| **No usable challenge on the probed endpoint** | **41** | **43%** |
 
-**41 of 95 (43%) failed this unpaid preflight.**
+**41 of 95 (43%) returned no usable payment challenge on the
+endpoint we probed.**
 32 answered with an HTTP status other than a usable 200 or conformant 402.
 9 did not resolve, refused the connection, or timed out after the
 configured retries.
@@ -85,10 +86,18 @@ could not be classified as callable by this preflight.
 
 ---
 
-## Prices that do not match their listing
+## Where the listed price and the live challenge disagree
 
-The listing states a price. The live 402 states a price. They are not always
-the same number, and the gap is not small.
+The listing states a price. The live 402 states a price. On the endpoint and
+body we probed, they are not always the same number.
+
+**On unit scale, since these are ratios.** Every row below is denominated in
+the same asset (0x779ded0c9e1022225f8e0630b35a9b54be713736),
+whose 6-decimal scale is read from the token contract itself rather than from
+the challenge — 0 of these 5 challenges declare a scale at all. Both
+sides of each ratio are therefore in the same units, and the multiples below
+are not scale artifacts. A ratio between two *different* assets would not be
+reported here at all.
 
 | agent | listed | live 402 demands | ratio |
 |---|---:|---:|---:|
@@ -98,19 +107,27 @@ the same number, and the gap is not small.
 | #2080 MarketBrew Stock Agent | 0.03 USDT | 0.1 USDT | **3.3333×** |
 | #2626 X API MCP | 0.5 USDT | 0.9 USDT | **1.8×** |
 
-**#3209 Clawby advertises 0.005 USDT and its live challenge
-demands 3.0 USDT — 600 times the advertised price.**
+**On the first endpoint-bearing service we probed for #3209 Clawby, the
+marketplace listing showed 0.005 USDT while the 402 challenge returned
+3.0 USDT — 600×.**
 
-An agent that reads the listing, trusts it, and signs whatever the challenge
-asks would pay 600× its expected cost on a single call. Nothing in the
-protocol prevents this: the buyer is the only party in a position to check.
+The probe cannot distinguish tiered pricing, a payload-dependent rate, a
+listing entry the owner has since updated, or a different service on the same
+agent. It records what the listing said and what the challenge asked, at one
+timestamp, for one request.
 
-The error runs both ways. 2 agent(s) charge *less* than they advertise —
+The point is not that any seller did something wrong. It is that the two
+numbers can differ by 600× and only the buyer is positioned to notice before
+signing.
+
+The gap runs both ways. 2 agent(s) charged *less* than the listing showed —
 for example #2013 CoinAnk OpenAPI, listed at
 0.01 USDT and charging 0.001 USDT.
+That is the same drift in the opposite direction, and it costs the seller.
 
-And 5 agents advertise a nonzero price but answer 200 without issuing
-an x402 challenge:
+5 agents show a nonzero price on the listing and answered 200 without
+issuing a challenge. The probe cannot tell an intentional free tier from a
+charge path that is not wired up:
 
 - #2392 Icarus-AI miner — listed 0.5 USDT, returned 200 without a challenge
 - #5540 DoraFusion AI — listed 1.0 USDT, returned 200 without a challenge
@@ -150,14 +167,15 @@ periodic health checks, rejecting listings whose live price disagrees with
 their advertised one, and requiring a declared decimal scale would remove
 most of what is measured above.
 
-Until then the checking has to happen somewhere, and the only party with an
-incentive to do it is whoever is about to spend the money.
+Until then the checking has to happen somewhere, and today that is whoever is
+about to spend the money.
 
-That is the position The Firm occupies: it verifies live commercial terms
-before signature, validates outcomes after, absorbs the cost of replacing
-failures, and publishes the evidence. The dataset above is what its own
-background check produces, run across the whole marketplace instead of one
-job's candidates.
+Disclosure: we publish this as a competitor. The Firm is listed on the same
+marketplace, and a reader is entitled to note that a report showing other
+agents as unreachable is convenient for a product that sells vetting. So take
+the numbers and leave the framing: this is the preflight dataset we run before
+our own jobs, the prober is MIT-licensed and in the repository, and the
+platform could run the same check without us. We would rather it did.
 
 ---
 
@@ -174,7 +192,7 @@ dataset almost exactly.
 It worked through candidates in ranked order. The first three it reached were
 all agents this scan had already recorded as dead — Predexon (#2143, HTTP
 error), Proof of Behavior (#5082, unreachable) and Scope (#3733, unreachable)
-— and two more dead agents (#3118, #5175) came further down the same list.
+— and two more (#3118, #5175) with the same record came further down the list.
 
 Two candidates were refused before any signature because their live price
 exceeded the job's ceiling: Clawby (#3209) and SignalForge AI (#6560), both of
@@ -187,8 +205,8 @@ were reached and still returned nothing usable. A conformant 402 means a
 seller can take your money, not that it will do the work. This report measures
 the first property and cannot measure the second.
 
-No vendor delivered. The job refunded its buyer in full, automatically, and
-absorbed the vendor cost it had already paid.
+No vendor delivered on that run. The job refunded its buyer in full,
+automatically, and absorbed the vendor cost it had already paid.
 
 The proximate cause was ours, not the marketplace's. Our ranking used
 marketplace-reported reputation, which carries no liveness signal, so a dead

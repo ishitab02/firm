@@ -93,9 +93,10 @@ w("|---|---:|---:|");
 w(`| Probed | ${n} | 100% |`);
 w(`| Reachable and x402-conformant | ${conformant.length} | ${pct(conformant.length)}% |`);
 w(`| Returned 200 without an x402 challenge | ${free.length} | ${pct(free.length)}% |`);
-w(`| **Dead or misrouted** | **${dead.length}** | **${pct(dead.length)}%** |`);
+w(`| **No usable challenge on the probed endpoint** | **${dead.length}** | **${pct(dead.length)}%** |`);
 w("");
-w(`**${dead.length} of ${n} (${pct(dead.length)}%) failed this unpaid preflight.**`);
+w(`**${dead.length} of ${n} (${pct(dead.length)}%) returned no usable payment challenge on the`);
+w("endpoint we probed.**");
 w(`${httpError.length} answered with an HTTP status other than a usable 200 or conformant 402.`);
 w(`${unreachable.length} did not resolve, refused the connection, or timed out after the`);
 w("configured retries.");
@@ -139,11 +140,27 @@ w("could not be classified as callable by this preflight.");
 w("");
 w("---");
 w("");
-w("## Prices that do not match their listing");
+w("## Where the listed price and the live challenge disagree");
 w("");
-w("The listing states a price. The live 402 states a price. They are not always");
-w("the same number, and the gap is not small.");
+w("The listing states a price. The live 402 states a price. On the endpoint and");
+w("body we probed, they are not always the same number.");
 w("");
+// The strongest technical objection to these ratios is that they might be
+// decimal-scale artifacts: comparing base units across two different scales
+// produces a meaningless multiple. Answer it in the text rather than leaving a
+// reader to wonder, because every one of these rows names somebody.
+{
+  const assets = new Set(overListing.map((r) => String(r.asset ?? "").toLowerCase()));
+  const declared = overListing.filter((r) => r.declared_decimals !== null).length;
+  w("**On unit scale, since these are ratios.** Every row below is denominated in");
+  w(`the same asset (${assets.size === 1 ? [...assets][0] : "see the raw data"}),`);
+  w("whose 6-decimal scale is read from the token contract itself rather than from");
+  w(`the challenge — ${declared} of these ${overListing.length} challenges declare a scale at all. Both`);
+  w("sides of each ratio are therefore in the same units, and the multiples below");
+  w("are not scale artifacts. A ratio between two *different* assets would not be");
+  w("reported here at all.");
+  w("");
+}
 w("| agent | listed | live 402 demands | ratio |");
 w("|---|---:|---:|---:|");
 for (const r of overListing) {
@@ -152,23 +169,31 @@ for (const r of overListing) {
 w("");
 const worst = overListing[0];
 if (worst) {
-  w(`**#${worst.agent_id} ${worst.name} advertises ${usdt(worst.listed_amount.amount)} and its live challenge`);
-  w(`demands ${usdt(worst.live_amount.amount)} — ${worst.price_ratio} times the advertised price.**`);
+  w(`**On the first endpoint-bearing service we probed for #${worst.agent_id} ${worst.name}, the`);
+  w(`marketplace listing showed ${usdt(worst.listed_amount.amount)} while the 402 challenge returned`);
+  w(`${usdt(worst.live_amount.amount)} — ${worst.price_ratio}×.**`);
   w("");
-  w("An agent that reads the listing, trusts it, and signs whatever the challenge");
-  w(`asks would pay ${worst.price_ratio}× its expected cost on a single call. Nothing in the`);
-  w("protocol prevents this: the buyer is the only party in a position to check.");
+  w("The probe cannot distinguish tiered pricing, a payload-dependent rate, a");
+  w("listing entry the owner has since updated, or a different service on the same");
+  w("agent. It records what the listing said and what the challenge asked, at one");
+  w("timestamp, for one request.");
+  w("");
+  w("The point is not that any seller did something wrong. It is that the two");
+  w(`numbers can differ by ${worst.price_ratio}× and only the buyer is positioned to notice before`);
+  w("signing.");
   w("");
 }
 if (underListing.length) {
-  w(`The error runs both ways. ${underListing.length} agent(s) charge *less* than they advertise —`);
+  w(`The gap runs both ways. ${underListing.length} agent(s) charged *less* than the listing showed —`);
   w(`for example #${underListing[0].agent_id} ${underListing[0].name}, listed at`);
   w(`${usdt(underListing[0].listed_amount.amount)} and charging ${usdt(underListing[0].live_amount.amount)}.`);
+  w("That is the same drift in the opposite direction, and it costs the seller.");
   w("");
 }
 if (freeDespitePrice.length) {
-  w(`And ${freeDespitePrice.length} agents advertise a nonzero price but answer 200 without issuing`);
-  w("an x402 challenge:");
+  w(`${freeDespitePrice.length} agents show a nonzero price on the listing and answered 200 without`);
+  w("issuing a challenge. The probe cannot tell an intentional free tier from a");
+  w("charge path that is not wired up:");
   w("");
   for (const r of freeDespitePrice) {
     w(`- #${r.agent_id} ${r.name} — listed ${usdt(r.listed_amount.amount)}, returned 200 without a challenge`);
@@ -207,14 +232,15 @@ w("periodic health checks, rejecting listings whose live price disagrees with");
 w("their advertised one, and requiring a declared decimal scale would remove");
 w("most of what is measured above.");
 w("");
-w("Until then the checking has to happen somewhere, and the only party with an");
-w("incentive to do it is whoever is about to spend the money.");
+w("Until then the checking has to happen somewhere, and today that is whoever is");
+w("about to spend the money.");
 w("");
-w("That is the position The Firm occupies: it verifies live commercial terms");
-w("before signature, validates outcomes after, absorbs the cost of replacing");
-w("failures, and publishes the evidence. The dataset above is what its own");
-w("background check produces, run across the whole marketplace instead of one");
-w("job's candidates.");
+w("Disclosure: we publish this as a competitor. The Firm is listed on the same");
+w("marketplace, and a reader is entitled to note that a report showing other");
+w("agents as unreachable is convenient for a product that sells vetting. So take");
+w("the numbers and leave the framing: this is the preflight dataset we run before");
+w("our own jobs, the prober is MIT-licensed and in the repository, and the");
+w("platform could run the same check without us. We would rather it did.");
 w("");
 w("---");
 w("");
@@ -234,7 +260,7 @@ w("");
 w("It worked through candidates in ranked order. The first three it reached were");
 w("all agents this scan had already recorded as dead — Predexon (#2143, HTTP");
 w("error), Proof of Behavior (#5082, unreachable) and Scope (#3733, unreachable)");
-w("— and two more dead agents (#3118, #5175) came further down the same list.");
+w("— and two more (#3118, #5175) with the same record came further down the list.");
 w("");
 w("Two candidates were refused before any signature because their live price");
 w("exceeded the job's ceiling: Clawby (#3209) and SignalForge AI (#6560), both of");
@@ -247,8 +273,8 @@ w("were reached and still returned nothing usable. A conformant 402 means a");
 w("seller can take your money, not that it will do the work. This report measures");
 w("the first property and cannot measure the second.");
 w("");
-w("No vendor delivered. The job refunded its buyer in full, automatically, and");
-w("absorbed the vendor cost it had already paid.");
+w("No vendor delivered on that run. The job refunded its buyer in full,");
+w("automatically, and absorbed the vendor cost it had already paid.");
 w("");
 w("The proximate cause was ours, not the marketplace's. Our ranking used");
 w("marketplace-reported reputation, which carries no liveness signal, so a dead");
