@@ -78,6 +78,89 @@ def _vendor_error(deliverable: dict[str, Any]) -> str | None:
     return None
 
 
+#: Symbols we can recognise by their common written forms. A request naming a
+#: subject we do not know how to spot is not judged -- absence of evidence is
+#: not a relevance failure.
+_SYMBOL_ALIASES: dict[str, tuple[str, ...]] = {
+    "BTC": ("btc", "bitcoin", "xbt"),
+    "ETH": ("eth", "ethereum", "ether"),
+    "SOL": ("sol", "solana"),
+    "BNB": ("bnb", "binance coin"),
+    "XRP": ("xrp", "ripple"),
+    "DOGE": ("doge", "dogecoin"),
+    "ADA": ("ada", "cardano"),
+    "AVAX": ("avax", "avalanche"),
+    "MATIC": ("matic", "polygon"),
+    "OKB": ("okb",),
+    "USDT": ("usdt", "tether"),
+    "USDC": ("usdc",),
+}
+
+
+def _mentions(text: str, aliases: tuple[str, ...]) -> bool:
+    """Does the text mention any alias, as a word rather than a substring?
+
+    Substring matching would find "eth" inside "method" and "whether", which is
+    exactly the kind of false pass this check exists to prevent.
+    """
+    import re
+
+    return any(re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", text) for alias in aliases)
+
+
+def relevance_failure(deliverable_text: str, request: dict[str, Any] | None) -> str | None:
+    """Does the deliverable actually concern what the buyer asked about?
+
+    This is the check whose absence let a real reviewer pay twice for the wrong
+    asset. He asked for an ETH snapshot; the vendor returned a fixed Bitcoin
+    spot-ETF dataset; every other check passed because the payload was
+    well-formed, non-empty, fresh and substantive. It was simply about something
+    else. `passed=true` on wrong-topic output is worse than a failure, because
+    a failure would have refunded him.
+
+    Deliberately narrow, because a relevance heuristic that guesses wrong fires a
+    vendor that did nothing wrong and records a false accusation against it:
+
+      - Only runs when the request names a subject symbol we recognise.
+      - Only fails when that symbol is absent AND a *different* recognised
+        symbol is present. A deliverable that mentions nothing we recognise is
+        not judged; the LLM rubric downstream is the right tool for that.
+      - Word-boundary matching, so "eth" in "method" is not a match.
+
+    The second condition is what makes it safe. "Asked for ETH, got a document
+    all about BTC and never mentioning ETH" is a confident call. "Asked for ETH,
+    got prose we cannot classify" is not, and returns None.
+    """
+    if not request:
+        return None
+
+    raw = request.get("symbol") or request.get("asset") or request.get("ticker")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+
+    wanted = raw.strip().upper()
+    aliases = _SYMBOL_ALIASES.get(wanted)
+    if aliases is None:
+        return None
+
+    text = deliverable_text.lower()
+    if _mentions(text, aliases):
+        return None
+
+    others = [
+        symbol
+        for symbol, other_aliases in _SYMBOL_ALIASES.items()
+        if symbol != wanted and _mentions(text, other_aliases)
+    ]
+    if not others:
+        return None
+
+    return (
+        f"buyer asked about {wanted}, and the deliverable never mentions it while "
+        f"discussing {', '.join(sorted(others))} instead"
+    )
+
+
 def _payload_text(deliverable: dict[str, Any]) -> str:
     """All substantive text in the response, whatever shape it arrived in.
 
@@ -116,7 +199,7 @@ def validate(deliverable: dict[str, Any], subtask_spec: dict[str, Any]) -> Valid
     semantic_rubric below, which the worker may run after these pass — they are
     kept out of here so this function stays pure and unit-testable.
     """
-    checks_run = ["schema", "non_empty_content", "freshness", "semantic_sanity"]
+    checks_run = ["schema", "non_empty_content", "freshness", "relevance", "semantic_sanity"]
     failures: list[ValidationFailure] = []
 
     if not isinstance(deliverable, dict):
@@ -139,6 +222,12 @@ def validate(deliverable: dict[str, Any], subtask_spec: dict[str, Any]) -> Valid
         failures.append(ValidationFailure(check="non_empty_content", detail="content is empty"))
     elif not payload_text:
         failures.append(ValidationFailure(check="non_empty_content", detail="response carries no content"))
+
+    # Does it concern what was asked about? Everything above this line can pass
+    # on a well-formed answer to a different question.
+    off_topic = relevance_failure(payload_text, subtask_spec.get("request"))
+    if off_topic is not None:
+        failures.append(ValidationFailure(check="relevance", detail=off_topic))
 
     generated_at = deliverable.get("generated_at")
     if generated_at:

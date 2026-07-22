@@ -234,7 +234,14 @@ async def _procure_subtask(
                 )
             continue
 
-        validation = validate(response.result, {"acceptance": subtask.subtask})
+        # The buyer's own params ride along so validation can ask whether the
+        # deliverable concerns what was actually requested. Without them the
+        # validator can only check that a response is well-formed, which is how
+        # a Bitcoin ETF dataset passed as an answer to a question about ETH.
+        validation = validate(
+            response.result,
+            {"acceptance": subtask.subtask, "request": dict(task.params) if task.params else None},
+        )
         state.setdefault("hires", []).append(
             HireReceipt(
                 agent_id=vendor.agent_id,

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from firm.validation import validate, _vendor_error
+from firm.validation import relevance_failure, validate, _vendor_error
 
 
 def test_validation_flags_malformed_source_urls() -> None:
@@ -188,3 +188,66 @@ def test_boolean_false_status_still_fails_regardless_of_content():
 def test_recognised_success_codes_still_pass():
     for code in ("0", "200", "ok", "success"):
         assert _vendor_error({"code": code, "data": [{"x": "yyyyyyyyyyyy"}]}) is None
+
+
+# --- relevance -------------------------------------------------------------
+# The check whose absence let OKX's reviewer pay 0.1 USDT twice for the wrong
+# asset. He asked for an ETH 4h snapshot; the vendor returned a fixed Bitcoin
+# spot-ETF dataset; every other check passed because the payload was
+# well-formed, non-empty, fresh and substantive. It was about something else.
+
+_BTC_ETF_PAYLOAD = (
+    "IBIT iShares Bitcoin Trust BlackRock nav 36.35 btcAmount 734762.151 "
+    "FBTC Fidelity Wise Origin Bitcoin netInflow 163892400 Coinbase custodian"
+)
+
+
+def test_wrong_asset_is_a_relevance_failure():
+    detail = relevance_failure(_BTC_ETF_PAYLOAD, {"symbol": "ETH", "timeframe": "4h"})
+    assert detail is not None
+    assert "ETH" in detail and "BTC" in detail
+
+
+def test_right_asset_passes():
+    assert relevance_failure(_BTC_ETF_PAYLOAD, {"symbol": "BTC"}) is None
+
+
+def test_alias_counts_as_a_mention():
+    assert relevance_failure("A summary of Ethereum price action", {"symbol": "ETH"}) is None
+
+
+def test_substring_is_not_a_mention():
+    """'eth' inside 'method'/'whether' must not count, or the check is useless."""
+    detail = relevance_failure("Our method determines whether bitcoin rose", {"symbol": "ETH"})
+    assert detail is not None
+
+
+def test_unclassifiable_output_is_not_judged():
+    """No recognised symbol anywhere => we cannot tell, so we do not accuse."""
+    assert relevance_failure("A general commentary with no tickers at all", {"symbol": "ETH"}) is None
+
+
+def test_no_symbol_in_request_is_not_judged():
+    assert relevance_failure(_BTC_ETF_PAYLOAD, {"timeframe": "4h"}) is None
+    assert relevance_failure(_BTC_ETF_PAYLOAD, {}) is None
+    assert relevance_failure(_BTC_ETF_PAYLOAD, None) is None
+
+
+def test_unknown_symbol_is_not_judged():
+    """A ticker we have no aliases for cannot be searched for honestly."""
+    assert relevance_failure(_BTC_ETF_PAYLOAD, {"symbol": "WIFHAT"}) is None
+
+
+def test_end_to_end_the_reviewers_job_now_fails_validation():
+    """The exact shape that was settled and never refunded."""
+    deliverable = {"code": "1", "data": [{"ticker": "IBIT", "etfName": "iShares Bitcoin Trust", "price": 37.67}]}
+    spec = {"acceptance": "market_snapshot", "request": {"symbol": "ETH", "timeframe": "4h"}}
+    result = validate(deliverable, spec)
+    assert result.passed is False
+    assert any(f.check == "relevance" for f in result.failures)
+
+
+def test_end_to_end_matching_asset_still_passes():
+    deliverable = {"code": "1", "data": [{"ticker": "IBIT", "etfName": "iShares Bitcoin Trust", "price": 37.67}]}
+    spec = {"acceptance": "market_snapshot", "request": {"symbol": "BTC", "timeframe": "1h"}}
+    assert validate(deliverable, spec).passed is True
