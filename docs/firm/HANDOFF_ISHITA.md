@@ -331,6 +331,34 @@ Only after Poulav confirms all three deployed and verified:
 Then ask David to re-test. Not before — a third rejection on a finding we
 already fixed but had not shipped would be the worst available outcome.
 
+**Run this immediately before you message him**, not the day before:
+
+```bash
+node tools/review/preflight.mjs
+```
+
+It checks the whole path a reviewer touches — endpoint up, GET and POST both
+pricing, the challenge well-formed, refund gas, daily cap, worker alive, and
+whether OKLink is live. It prints `READY` or `NOT READY`. If it says NOT READY,
+do not send the message.
+
+Two things drift on their own and both take the endpoint down or turn a sale
+into a refund: native gas on `0xC029…50e0` draining, and OKLink going offline.
+That is why the check belongs next to the message, not ahead of it.
+
+**Do not deploy anything while David is testing.** A rolling restart mid-purchase
+is the one way to turn a working path into "took my money, returned nothing".
+
+Afterwards, capture his purchase:
+
+```bash
+node tools/review/preflight.mjs --inbound
+```
+
+Any payer that is not our QA wallet is flagged `*** EXTERNAL BUYER ***`. That
+transaction is the first genuine external sale this entry has ever had — save
+the tx hash, the receipt and the job record.
+
 ## One thing that may change the listing — wait for Poulav
 
 A private key for the Firm wallet `0xC029…50e0` was exposed, and rotating it is
