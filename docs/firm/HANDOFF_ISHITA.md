@@ -65,6 +65,19 @@ Median vendor cost for `market_snapshot` is ~10,000 base units (0.01 USDT). At
 instead of a raw API call. At 0.5 it is ~50x, which invites arithmetic the
 "margin is not markup" claim in our README does not survive.
 
+> **SUPERSEDED 2026-07-23 — the reasoning above was wrong on the facts.** It
+> assumed ~10,000 base units of vendor cost. The vendor we actually hire, OKLink
+> #2023, charges **15 units** — below the 25th percentile of the whole market —
+> so the real ratio is ~6,700x for Express, not 10x, and the "~10x premium"
+> line must not be repeated anywhere.
+>
+> The price itself is fine and the justification changes rather than the number.
+> Across the 129 prices in our own scan: p25 10,000, **median 100,000**, p75
+> 300,000, max 6,600,000. **Express at 0.1 USDT is exactly the median, and
+> Projects at 1 USDT is a price point eight other listed services already
+> charge.** We price at market. The large ratio reflects how unusually cheap
+> OKLink is, not how expensive we are. Full reasoning in the README.
+
 **Related correction you should know about**, because it changes the numbers:
 `build_provenance` was subtracting a flat 50,000-unit Treasury books cost from
 our margin *whether or not the books call happened* — and it never happens, since

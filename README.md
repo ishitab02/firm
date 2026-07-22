@@ -37,6 +37,22 @@ traction, and they are never counted as any of those.
 ## Why this version wins (the three upgrades over a generic orchestrator)
 
 1. **Fixed quote, guarantee premium.** The Firm quotes a fixed price up front and bears execution risk. When a hired agent fails and a replacement is hired, the overrun comes out of The Firm's margin, not the user's price. The margin is not markup: it buys vetting, validation, retries, and a guaranteed outcome. Total failure = full refund.
+
+   **Priced at market, not at cost-plus** — and the distinction is worth stating before someone does the arithmetic themselves. Express costs 15 base units of vendor input and sells for 100,000, which is a ratio of ~6,700x; Projects buys 30–60 units across its legs and sells for 1,000,000. Those ratios look indefensible if you assume the price is meant to be a markup on the input. It is not.
+
+   Across the 129 service prices in our own marketplace scan (`data/marketplace-health-2026-07-21.json`):
+
+   | | base units | USDT |
+   |---|---|---|
+   | minimum | 1 | 0.000001 |
+   | 25th percentile | 10,000 | 0.01 |
+   | **median** | **100,000** | **0.1** |
+   | 75th percentile | 300,000 | 0.3 |
+   | maximum | 6,600,000 | 6.6 |
+
+   The most common price points are 10,000 (33 services), 100,000 (24), 500,000 (17), 50,000 (13) and 1,000,000 (8). **Firm Express at 0.1 USDT is exactly the marketplace median. Firm Projects at 1 USDT is a price eight other listed services already charge.** Neither is an outlier.
+
+   What makes the ratio large is the input, not the price: OKLink sells a raw price series for 15 units, which sits *below the 25th percentile* — near the floor of the entire market. Comparing a median retail price against one unusually cheap input measures OKLink's pricing, not ours. The buyer is paying for the analysis, the validation, the replacement of failed vendors, and a refund guarantee the Firm funds out of its own margin — priced where comparable services are priced.
 2. **Adaptive fallback, on measured evidence.** The Firm does not trust its hires. It background-checks every candidate before paying — a free 402 probe that reads what the vendor will *actually* charge, not what it advertises. Deliverables then pass a validation stack; failures are recorded, the vendor's score drops, and the next candidate is hired automatically. The user never sees the hiccup.
 
    Still **not** claimed as "Darwinian learning", but the gap has narrowed and it is worth being exact about where. Demonstrated on real paid jobs: the fallback loop firing and replacing five vendors inside a single job; a performance ledger with nine vendors carrying adjustments earned from paid outcomes (−30, −19, −10); and preflight health over 95 probed agents changing which vendors get hired at all — after that filter went in, a run that had been hiring dead endpoints first hired **zero**.

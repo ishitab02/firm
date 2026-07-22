@@ -57,10 +57,35 @@ any money moves.
 
 ## Service 2: Firm Projects
 
-Free quote, then paid execution at the quoted price.
+Endpoint: `https://firm-gateway.fly.dev/projects`
+Price: **1 USDT** (`1000000` base units).
 
-Suggested price display if dynamic quote is not accepted:
-S/M/L tiers at `1 / 3 / 5 USDT`.
+Two to four BTC/ETH market-analysis legs across `1h`, `2h`, `4h` or `1d`. Each
+leg hires OKLink #2023 separately for its own price series. Results are
+validated per leg and assembled **only if every leg passes**; otherwise the
+buyer is refunded in full and the Firm absorbs the vendor cost.
+
+Required input: a `goal` naming assets and timeframes, a `budget_cap` in
+6-decimal USDT base units, and optional `constraints`. A single-leg request is
+refused with a pointer to Express; an unsupported goal is refused before any
+money moves. Every unpaid request receives a 402 challenge first.
+
+## Pricing, and how to answer the margin question
+
+Someone will divide our price by our vendor cost. Have the answer ready.
+
+Across the 129 service prices in our own marketplace scan: p25 `10,000`,
+**median `100,000`**, p75 `300,000`, max `6,600,000`. The most common price
+points are 10,000 (33 services), 100,000 (24), 500,000 (17), 50,000 (13) and
+1,000,000 (8).
+
+**Express at 0.1 USDT is exactly the marketplace median. Projects at 1 USDT is
+a price eight other listed services already charge.** We price at market.
+
+The ratio looks extreme (~6,700x for Express) because OKLink sells raw data for
+15 units, *below the 25th percentile of the entire market*. That measures how
+cheap OKLink is, not how expensive we are. Do not repeat the old "~10x premium"
+line — it assumed a 10,000-unit vendor cost that turned out to be 15.
 
 Flow:
 1. `get_quote`: returns deterministic fixed quote and plan summary.
