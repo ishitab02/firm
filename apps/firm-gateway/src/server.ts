@@ -482,7 +482,8 @@ async function sellerCharge(opts: {
     network: seller.network,
     payTo: seller.payTo,
     resource: opts.resource,
-    description: `The Firm — ${opts.name}`
+    description: `The Firm — ${opts.name}`,
+    resourceUrl: seller.resourceUrl
   });
 
   const header = paymentHeaderFrom(opts.headers);
@@ -551,6 +552,7 @@ async function sellerAuthorize(opts: {
     payTo: seller.payTo,
     resource: opts.resource,
     description: `The Firm — ${opts.name}`,
+    resourceUrl: seller.resourceUrl,
     inputSchema: EXPRESS_HTTP_INPUT
   });
   const header = paymentHeaderFrom(opts.headers);

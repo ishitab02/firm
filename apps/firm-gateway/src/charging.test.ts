@@ -13,7 +13,9 @@ import {
   paymentHeaderFrom,
   sellerConfigFromEnv,
   settlePayment,
-  verifyPayment
+  verifyPayment,
+  X_LAYER_NETWORK,
+  X_LAYER_USDT
 } from "./charging.js";
 
 const spec = {
@@ -378,5 +380,53 @@ describe("facilitator response envelope", () => {
     });
     const result = await settlePayment(HEADER, buildRequirements(spec), { facilitatorUrl: url });
     expect(result).toMatchObject({ ok: true, transaction: "0xtx" });
+  });
+});
+
+/**
+ * The top-level `resource` object.
+ *
+ * OKX's A2MCP guide specifies it, and both listed vendors this repo has paid
+ * publish it while leaving `accepts[].resource` unset. We published the inverse,
+ * so nothing in our challenge told a buyer which URL to replay against.
+ * `x402-check` passes either way — it validates pricing, not replayability —
+ * which is exactly why this survived unnoticed.
+ */
+describe("the challenge tells a buyer where to replay", () => {
+  const base = {
+    amount: "100000",
+    decimals: 6,
+    asset: X_LAYER_USDT,
+    network: X_LAYER_NETWORK,
+    payTo: "0xc0296012cfbb0e6df5da7158b65dbc46dd9650e0",
+    resource: "firm:express:market_snapshot",
+    description: "The Firm — express_run"
+  };
+
+  it("publishes url, description and mimeType when a public URL is configured", () => {
+    const requirements = buildRequirements({ ...base, resourceUrl: "https://firm-gateway.fly.dev" });
+    expect(requirements.resource).toEqual({
+      url: "https://firm-gateway.fly.dev",
+      description: "The Firm — express_run",
+      mimeType: "application/json"
+    });
+  });
+
+  it("omits the object entirely when no URL is configured, rather than guessing", () => {
+    const requirements = buildRequirements(base);
+    expect(requirements.resource).toBeUndefined();
+    expect("resource" in requirements).toBe(false);
+  });
+
+  it("keeps accepts[].resource, which the facilitator has already settled against", () => {
+    const requirements = buildRequirements({ ...base, resourceUrl: "https://firm-gateway.fly.dev" });
+    expect(requirements.accepts[0].resource).toBe("firm:express:market_snapshot");
+  });
+
+  it("still encodes to a base64 challenge carrying both", () => {
+    const requirements = buildRequirements({ ...base, resourceUrl: "https://firm-gateway.fly.dev" });
+    const decoded = JSON.parse(Buffer.from(encodeRequirements(requirements), "base64").toString("utf8"));
+    expect(decoded.resource.url).toBe("https://firm-gateway.fly.dev");
+    expect(decoded.accepts[0].payTo).toBe(base.payTo);
   });
 });

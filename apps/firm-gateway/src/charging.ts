@@ -45,6 +45,11 @@ export type ChargeSpec = {
   payTo: string;
   resource: string;
   description: string;
+  /**
+   * The public URL a buyer replays against, published as the challenge's
+   * top-level `resource` object. See `buildRequirements`.
+   */
+  resourceUrl?: string;
   /** Bazaar-style replay contract included in the 402 challenge. */
   inputSchema?: Record<string, unknown>;
 };
@@ -66,6 +71,8 @@ export function facilitatorUrlFor(base: string, route: string): string {
 
 export type PaymentRequirements = {
   x402Version: number;
+  /** Where a buyer replays after paying. Absent when no public URL is configured. */
+  resource?: { url: string; description: string; mimeType: string };
   accepts: Array<Record<string, unknown>>;
 };
 
@@ -165,13 +172,55 @@ export function sellerConfigFromEnv() {
       `Firm Express is listed for X Layer USDT only; expected ${X_LAYER_NETWORK} asset ${X_LAYER_USDT}`
     );
   }
-  return { payTo, asset, network, facilitatorUrl: process.env.X402_FACILITATOR_URL };
+  return {
+    payTo,
+    asset,
+    network,
+    facilitatorUrl: process.env.X402_FACILITATOR_URL,
+    // The public URL buyers replay against. Not derived from the request Host
+    // header: that is attacker-controlled, and this value tells a buyer where to
+    // send a paid call. Unset means the top-level `resource` is omitted rather
+    // than guessed.
+    resourceUrl: process.env.FIRM_RESOURCE_URL
+  };
 }
 
-/** Build the `accepts` payload for a 402 response. */
+/**
+ * Build the 402 challenge.
+ *
+ * The top-level `resource` object is what OKX's A2MCP guide specifies — it
+ * "contains `url`, `description`, and `mimeType`" — and it is what every listed
+ * vendor this repo has actually paid publishes:
+ *
+ *   CoinAnk #2013   resource: { url: "https://open-api.coinank.com/..." }
+ *   OKLink #2023    resource: { url: "https://www.oklink.com/...", mimeType }
+ *
+ * Both leave `accepts[].resource` unset. We had the inverse — no top-level
+ * object, and an opaque `firm:express:market_snapshot` inside `accepts` — so a
+ * buyer reading the challenge to learn WHICH URL to replay against found no URL
+ * anywhere in it. `x402-check` passes either way because it validates pricing,
+ * not replayability, which is why this survived.
+ *
+ * `accepts[].resource` is deliberately KEPT. It is the string the facilitator
+ * has already verified and settled real payments against, and this close to a
+ * deadline the additive half of the fix carries the benefit without re-opening
+ * the settle path that broke twice.
+ *
+ * Omitted entirely when no URL is configured, rather than emitted with a guessed
+ * or empty value: a wrong replay URL is worse than an absent one.
+ */
 export function buildRequirements(spec: ChargeSpec): PaymentRequirements {
   return {
     x402Version: 2,
+    ...(spec.resourceUrl
+      ? {
+          resource: {
+            url: spec.resourceUrl,
+            description: spec.description,
+            mimeType: "application/json"
+          }
+        }
+      : {}),
     accepts: [
       {
         scheme: "exact",

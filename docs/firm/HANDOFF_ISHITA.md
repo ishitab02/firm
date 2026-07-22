@@ -278,14 +278,24 @@ worse than failing.
 Confirmed today, not assumed: the deployed procurer's `/health` has no
 `refund_ready` field at all.
 
-## ACTION 1 — unlist or disable **Firm Express** now
+## ACTION 1 — unlist **Firm Express** for the deploy window
 
 Before Poulav deploys, not after. The three services are mutually incompatible
-while the deployment runs, and Express is the only thing anyone can buy. A buyer
-arriving mid-window pays a live endpoint whose worker cannot serve them.
+while the deployment runs, and Express is the only thing anyone can buy.
 
-Poulav cannot do this — it is your listing. It is the one item gating the
-deploy starting.
+**Corrected — this is weaker protection than first written.** OKX's own guidance
+says a registered agent "is callable, it just won't appear in public discovery
+until listed." So unlisting removes Express from *discovery*, not from the
+network: `firm-gateway.fly.dev` stays live, and anyone holding the URL — David
+included — can still call it. Do it anyway, because it stops new buyers finding
+us mid-window, but do not treat it as a safety gate. The actual protection is
+that the window is short and correctly ordered.
+
+The same fact helps later: because a registered agent is callable before it is
+listed, the full purchase test does **not** need public discovery. Testing does
+not have to wait on re-listing.
+
+Poulav cannot do this — it is your listing.
 
 ## ACTION 2 — drop **Firm Projects** from `#7138`
 
