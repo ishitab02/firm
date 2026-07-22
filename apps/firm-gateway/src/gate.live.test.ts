@@ -447,8 +447,16 @@ suite("gateway settlement boundary", () => {
         taskId,
         JSON.stringify({ result: { symbol: "ETH", timeframe: "4h", price_action: "validated" } }),
         JSON.stringify({
-          hires: [],
-          economics: { margin_retained_or_absorbed: { amount: "500000", sign: "retained" } },
+          hires: [{
+            agent_id: "2023",
+            name: "Onchain Data Explorer",
+            cost: { amount: "15", decimals: 6, token: "USDT" }
+          }],
+          economics: {
+            actual_vendor_costs: { amount: "15", decimals: 6, token: "USDT" },
+            margin_retained_or_absorbed: { amount: "99985", sign: "retained" }
+          },
+          books: { cost: { amount: "0", decimals: 6, token: "USDT" } },
           guarantee_status: "delivered"
         })
       ]
@@ -467,6 +475,7 @@ suite("gateway settlement boundary", () => {
     const body = await response.json() as any;
     expect(response.status).toBe(200);
     expect(body.deliverable.result.symbol).toBe("ETH");
+    expect(body.receipt.vendor).toEqual({ agent_id: "2023", name: "Onchain Data Explorer" });
     expect(paths).toEqual(["/verify", "/settle"]);
     const row = await settleDb.query("SELECT state FROM firm_jobs WHERE task_id = $1", [taskId]);
     expect(row.rows[0].state).toBe("complete");
@@ -500,9 +509,19 @@ suite("gateway settlement boundary", () => {
     const body = await response.json() as any;
     expect(body.error.code).toBe("PAYMENT_NOT_SETTLED");
     const row = await settleDb.query(
-      "SELECT state, deliverable, provenance->>'guarantee_status' AS guarantee FROM firm_jobs WHERE task_id = $1",
+      `SELECT state, deliverable,
+              provenance->>'guarantee_status' AS guarantee,
+              provenance #>> '{economics,margin_retained_or_absorbed,amount}' AS margin_amount,
+              provenance #>> '{economics,margin_retained_or_absorbed,sign}' AS margin_sign
+       FROM firm_jobs WHERE task_id = $1`,
       [taskId]
     );
-    expect(row.rows[0]).toMatchObject({ state: "failed_not_charged", deliverable: null, guarantee: "not_charged" });
+    expect(row.rows[0]).toMatchObject({
+      state: "failed_not_charged",
+      deliverable: null,
+      guarantee: "not_charged",
+      margin_amount: "15",
+      margin_sign: "absorbed"
+    });
   });
 });

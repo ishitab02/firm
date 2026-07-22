@@ -114,6 +114,21 @@ test("market snapshot inference requires the actual technical-analysis contract"
     inferCapability({ serviceName: "Kline Lists", serviceDescription: "Kline market data for crypto analysis." }),
     "market_snapshot"
   );
+  assert.equal(
+    inferCapability({
+      serviceName: "Historical Token Price",
+      serviceDescription: "Returns token price history by tokenAddress and granularity."
+    }),
+    "market_snapshot"
+  );
+  assert.equal(
+    inferCapability({ serviceName: "Realtime Token Price", serviceDescription: "Returns current token prices." }),
+    null
+  );
+  assert.equal(
+    inferCapability({ serviceName: "Token Metadata", serviceDescription: "Returns token name and decimals." }),
+    null
+  );
 });
 
 test("token launch inference does not turn deployment or audit prose into a launch service", () => {

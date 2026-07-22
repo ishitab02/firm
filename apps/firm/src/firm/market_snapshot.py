@@ -24,40 +24,15 @@ series.
 """
 
 from datetime import datetime, timezone
-import os
 from typing import Any
 
-import httpx
-
-
-SUPPORTED_TIMEFRAMES = {
-    "1m": "1m",
-    "3m": "3m",
-    "5m": "5m",
-    "15m": "15m",
-    "30m": "30m",
-    "1h": "1H",
-    "2h": "2H",
-    "4h": "4H",
-    "6h": "6Hutc",
-    "12h": "12Hutc",
-    "1d": "1Dutc",
-    "1w": "1Wutc",
-}
+SUPPORTED_TIMEFRAMES = ("1h", "2h", "4h", "1d")
 
 TIMEFRAME_SECONDS = {
-    "1m": 60,
-    "3m": 180,
-    "5m": 300,
-    "15m": 900,
-    "30m": 1_800,
     "1h": 3_600,
     "2h": 7_200,
     "4h": 14_400,
-    "6h": 21_600,
-    "12h": 43_200,
     "1d": 86_400,
-    "1w": 604_800,
 }
 
 
@@ -81,14 +56,31 @@ VENDOR_TOKEN_SOURCES: dict[str, tuple[str, str]] = {
     "BTC": ("1", "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"),
 }
 
-#: What the vendor actually serves. `4H` is accepted and returns an empty array,
-#: so it is deliberately absent: anything coarser than an hour is bought hourly
-#: and resampled here, which is work the buyer is paying us to do.
-VENDOR_GRANULARITY = {"1h": "1H", "1d": "1D"}
-
-VENDOR_ENDPOINT = "https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history"
-VENDOR_TOOL = "get_token_price_history"
 VENDOR_AGENT_ID = "2023"
+VENDOR_AGENT_NAME = "Onchain Data Explorer"
+VENDOR_SERVICE_NAME = "Historical Token Price"
+
+
+def price_source_asset(symbol: str) -> dict[str, Any] | None:
+    """What the price was actually observed on, for the buyer to see.
+
+    The vendor sells on-chain ERC-20 price history, so an ETH request is served
+    from WETH and a BTC request from WBTC. Those track their underlying closely
+    but are distinct assets, and silently presenting one as the other is the same
+    class of quiet substitution that had a reviewer paying for Bitcoin ETF data
+    after asking about ETH. Say it in the deliverable.
+    """
+    source = VENDOR_TOKEN_SOURCES.get(symbol.upper())
+    if source is None:
+        return None
+    chain_index, token_address = source
+    wrapped = {"ETH": "WETH", "BTC": "WBTC"}.get(symbol.upper(), symbol.upper())
+    return {
+        "priced_via": wrapped,
+        "token_address": token_address,
+        "chain_index": chain_index,
+        "note": f"{symbol.upper()} priced from its wrapped ERC-20 ({wrapped}) on-chain series",
+    }
 
 
 def vendor_request(symbol: str, timeframe: str) -> dict[str, Any]:
@@ -105,9 +97,17 @@ def vendor_request(symbol: str, timeframe: str) -> dict[str, Any]:
     if timeframe not in TIMEFRAME_SECONDS:
         raise MarketSnapshotError(f"unsupported timeframe {timeframe}")
     # Buy the finest series the vendor actually serves, then resample upward.
-    granularity = "1D" if TIMEFRAME_SECONDS[timeframe] >= 86_400 else "1H"
+    granularity = "1D" if timeframe == "1d" else "1H"
     chain_index, token_address = source
-    return {"chainIndex": chain_index, "tokenAddress": token_address, "granularity": granularity}
+    return {
+        "chainIndex": chain_index,
+        "tokenAddress": token_address,
+        "granularity": granularity,
+        # The vendor documents `limit` as optional. Asking for 100 gives a 4h
+        # request enough history when honoured; the analysis also handles the
+        # 50-row response observed in the paid probe.
+        "limit": "100",
+    }
 
 
 def candles_from_price_series(rows: list[dict[str, Any]], timeframe: str) -> list[list[str]]:
@@ -128,13 +128,19 @@ def candles_from_price_series(rows: list[dict[str, Any]], timeframe: str) -> lis
             continue
     points.sort()
 
-    buckets: dict[int, list[float]] = {}
+    buckets: dict[int, list[tuple[int, float]]] = {}
     for timestamp_ms, price in points:
-        buckets.setdefault(timestamp_ms - (timestamp_ms % period_ms), []).append(price)
+        buckets.setdefault(timestamp_ms - (timestamp_ms % period_ms), []).append((timestamp_ms, price))
 
     return [
-        [str(bucket), str(prices[0]), str(max(prices)), str(min(prices)), str(prices[-1])]
-        for bucket, prices in sorted(buckets.items())
+        [
+            str(observations[-1][0]),
+            str(observations[0][1]),
+            str(max(price for _, price in observations)),
+            str(min(price for _, price in observations)),
+            str(observations[-1][1]),
+        ]
+        for _, observations in sorted(buckets.items())
     ]
 
 
@@ -168,13 +174,16 @@ def build_market_snapshot(
     rows: list[list[str]],
     *,
     generated_at: datetime | None = None,
-    source_base_url: str = "https://app.okx.com/api/v5/market/candles",
-    source: str = "OKX public candlesticks",
+    source: str = "provided market data",
     source_url: str | None = None,
+    minimum_candles: int = 20,
+    price_source_asset: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     symbol, timeframe, prompt = normalise_market_request(params)
-    if len(rows) < 20:
-        raise MarketSnapshotError(f"market data returned only {len(rows)} candles; need at least 20")
+    if len(rows) < minimum_candles:
+        raise MarketSnapshotError(
+            f"market data returned only {len(rows)} derived price buckets; need at least {minimum_candles}"
+        )
 
     try:
         candles = sorted(
@@ -193,16 +202,20 @@ def build_market_snapshot(
         )
     except (TypeError, ValueError) as error:
         raise MarketSnapshotError(f"market data contained an invalid candle: {error}") from error
-    if len(candles) < 20:
-        raise MarketSnapshotError(f"market data contained only {len(candles)} usable candles; need at least 20")
+    if len(candles) < minimum_candles:
+        raise MarketSnapshotError(
+            f"market data contained only {len(candles)} usable price buckets; need at least {minimum_candles}"
+        )
 
     latest = candles[-1]
     recent = candles[-20:]
+    long_window = len(recent)
+    short_window = min(8, max(3, long_window // 2))
     first = recent[0]
     change = latest["close"] - first["open"]
     change_pct = (change / first["open"] * 100) if first["open"] else 0.0
-    sma_short = sum(candle["close"] for candle in candles[-8:]) / 8
-    sma_long = sum(candle["close"] for candle in recent) / 20
+    sma_short = sum(candle["close"] for candle in candles[-short_window:]) / short_window
+    sma_long = sum(candle["close"] for candle in recent) / long_window
     if sma_short > sma_long * 1.002:
         trend = "bullish"
     elif sma_short < sma_long * 0.998:
@@ -221,10 +234,6 @@ def build_market_snapshot(
             f"latest {timeframe} candle is stale or future-dated: {market_data_at.isoformat()}"
         )
     instrument = f"{symbol}-USDT"
-    resolved_source_url = source_url or (
-        f"{source_base_url}?instId={instrument}&bar={SUPPORTED_TIMEFRAMES[timeframe]}&limit=100"
-    )
-
     return {
         "kind": "market_snapshot",
         "symbol": symbol,
@@ -234,7 +243,8 @@ def build_market_snapshot(
         "prompt": prompt,
         "price": latest["close"],
         "price_action": (
-            f"{instrument} {direction} {abs(change_pct):.2f}% across the latest 20 {timeframe} candles, "
+            f"{instrument} {direction} {abs(change_pct):.2f}% across the latest {long_window} "
+            f"{timeframe} derived price buckets, "
             f"from {first['open']:.6g} to {latest['close']:.6g}; recent range "
             f"{support:.6g}-{resistance:.6g}."
         ),
@@ -242,63 +252,29 @@ def build_market_snapshot(
             "direction": trend,
             "short_sma": round(sma_short, 8),
             "long_sma": round(sma_long, 8),
-            "method": "8-candle SMA versus 20-candle SMA with a 0.2% neutral band",
+            "method": (
+                f"{short_window}-bucket SMA versus {long_window}-bucket SMA "
+                "with a 0.2% neutral band"
+            ),
         },
-        "support": {"level": support, "method": "lowest low of latest 20 candles"},
-        "resistance": {"level": resistance, "method": "highest high of latest 20 candles"},
+        "support": {
+            "level": support,
+            "method": f"lowest observed price in latest {long_window} derived buckets",
+        },
+        "resistance": {
+            "level": resistance,
+            "method": f"highest observed price in latest {long_window} derived buckets",
+        },
+        "analysis_window_buckets": long_window,
+        "data_basis": "OHLC buckets derived from purchased point-price observations",
+        # An ETH request is priced from WETH's on-chain series, because that is
+        # what the vendor sells. The two track closely and are not the same
+        # asset, so the buyer is told rather than left to assume the price came
+        # from native ETH.
+        **({"price_source_asset": price_source_asset} if price_source_asset else {}),
         "market_data_at": market_data_at.isoformat().replace("+00:00", "Z"),
         "generated_at": timestamp.isoformat().replace("+00:00", "Z"),
         "source": source,
-        "source_urls": [resolved_source_url],
+        "source_urls": [source_url] if source_url else [],
         "disclaimer": "Deterministic market-data summary, not financial advice.",
     }
-
-
-async def fetch_market_snapshot(
-    params: dict[str, Any],
-    *,
-    timeout_seconds: float = 10.0,
-) -> dict[str, Any]:
-    symbol, timeframe, _ = normalise_market_request(params)
-    query = {
-        "instId": f"{symbol}-USDT",
-        "bar": SUPPORTED_TIMEFRAMES[timeframe],
-        "limit": "100",
-    }
-    configured = os.getenv("OKX_MARKET_DATA_URL")
-    endpoints = (
-        [configured]
-        if configured
-        else [
-            "https://app.okx.com/api/v5/market/candles",
-            "https://eea.okx.com/api/v5/market/candles",
-            "https://www.okx.com/api/v5/market/candles",
-        ]
-    )
-    payload: Any = None
-    used_endpoint: str | None = None
-    failures: list[str] = []
-    timeout = httpx.Timeout(timeout_seconds, connect=min(timeout_seconds, 4.0))
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        for endpoint in endpoints:
-            try:
-                response = await client.get(endpoint, params=query)
-                response.raise_for_status()
-                candidate = response.json()
-                if isinstance(candidate, dict) and str(candidate.get("code")) == "0":
-                    payload = candidate
-                    used_endpoint = endpoint
-                    break
-                failures.append(f"{endpoint}: {candidate.get('msg', 'rejected') if isinstance(candidate, dict) else 'invalid response'}")
-            except (httpx.HTTPError, ValueError) as error:
-                failures.append(f"{endpoint}: {type(error).__name__}")
-    if used_endpoint is None:
-        raise MarketSnapshotError("could not read OKX public candles: " + "; ".join(failures))
-
-    if not isinstance(payload, dict) or str(payload.get("code")) != "0":
-        detail = payload.get("msg") if isinstance(payload, dict) else "invalid response"
-        raise MarketSnapshotError(f"OKX public candles rejected the request: {detail}")
-    rows = payload.get("data")
-    if not isinstance(rows, list):
-        raise MarketSnapshotError("OKX public candles response has no data array")
-    return build_market_snapshot(params, rows, source_base_url=used_endpoint)

@@ -10,6 +10,8 @@
  * server (server.ts has a top-level listen()).
  */
 
+import { SUPPORTED_MARKET_SYMBOLS, SUPPORTED_MARKET_TIMEFRAMES } from "./express-args.js";
+
 /** The MCP protocol version this server speaks; echoed back if the client asks for one. */
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -59,7 +61,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "express_run",
     description:
-      "Paid, fixed price. Exact crypto market snapshot from public candles; validates symbol, timeframe, price action, trend, support and resistance before settlement.",
+      "Paid, fixed price. Buys a token-price series from OKLink #2023, derives a crypto market snapshot, and validates symbol, timeframe, price action, trend, support and resistance before settling the buyer payment.",
     inputSchema: {
       type: "object",
       required: ["job_type", "params"],
@@ -69,8 +71,8 @@ export const TOOL_DEFINITIONS = [
           type: "object",
           required: ["symbol", "timeframe", "prompt"],
           properties: {
-            symbol: { type: "string" },
-            timeframe: { type: "string" },
+            symbol: { type: "string", enum: [...SUPPORTED_MARKET_SYMBOLS] },
+            timeframe: { type: "string", enum: [...SUPPORTED_MARKET_TIMEFRAMES] },
             prompt: { type: "string" }
           }
         }

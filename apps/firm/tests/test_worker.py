@@ -1,6 +1,7 @@
 import json
 import asyncio
 from datetime import datetime, timezone
+from typing import Any
 
 from firm.cli import DemoProcurer, demo_vendors
 from firm.models import (
@@ -54,6 +55,25 @@ def _specialist(agent_id: str, capability: str, tool: str) -> VendorIndexEntry:
         kya_base_score=90,
         flags=[],
         last_verified_at="2026-07-18T00:00:00Z",
+    )
+
+
+def _express_vendor() -> VendorIndexEntry:
+    return VendorIndexEntry(
+        agent_id="2023",
+        name="Onchain Data Explorer",
+        endpoint="https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history",
+        services=[
+            VendorService(
+                tool="Historical Token Price",
+                capability="market_snapshot",
+                endpoint="https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history",
+                price=Money.usdt(15),
+            )
+        ],
+        kya_base_score=93,
+        flags=[],
+        last_verified_at="2026-07-22T00:00:00Z",
     )
 
 
@@ -194,7 +214,7 @@ def test_express_buys_its_price_series_and_records_the_hire() -> None:
     hour = 3_600_000
     rows = [
         {"price": str(1900 + (i % 7) * 3), "time": str(now_ms - i * hour)}
-        for i in range(120)
+        for i in range(50)
     ]
 
     class PriceSeriesVendor:
@@ -233,30 +253,43 @@ def test_express_buys_its_price_series_and_records_the_hire() -> None:
     )
 
     completed = asyncio.run(
-        run_task(task, [], InMemoryCheckpointStore(), PerformanceStore({}), vendor)
+        run_task(task, [_express_vendor()], InMemoryCheckpointStore(), PerformanceStore({}), vendor)
     )
 
     # It bought the series, with the verified WETH address and an hourly
     # granularity -- never a guessed contract, never the empty 4H series.
     assert len(vendor.calls) == 1
     bought = vendor.calls[0]
-    assert bought.tool == "get_token_price_history"
+    assert bought.tool == "Historical Token Price"
+    assert bought.max_amount.units() == 15
     assert bought.args["tokenAddress"] == "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
     assert bought.args["granularity"] == "1H"
+    assert bought.args["limit"] == "100"
 
     assert completed.state == JobState.READY_TO_SETTLE
     assert completed.deliverable is not None
     snapshot = completed.deliverable["result"]
     assert snapshot["symbol"] == "ETH"
     assert snapshot["timeframe"] == "4h"
+    assert 13 <= snapshot["analysis_window_buckets"] <= 14
     assert snapshot["trend"]["direction"] in {"bullish", "bearish", "sideways"}
     assert snapshot["support"]["level"] <= snapshot["resistance"]["level"]
 
     # The receipt names the agent and the money that reached it.
     assert completed.provenance is not None
     assert [hire.agent_id for hire in completed.provenance.hires] == ["2023"]
+    assert completed.provenance.hires[0].name == "Onchain Data Explorer"
     assert completed.provenance.hires[0].cost.units() == 15
     assert completed.provenance.economics.actual_vendor_costs.units() == 15
+    assert completed.provenance.data_sources == [
+        "OKLink Onchain Data Explorer #2023 purchased price series"
+    ]
+    assert snapshot["source_asset"] == {
+        "symbol": "WETH",
+        "chain_index": "1",
+        "token_address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "requested_symbol": "ETH",
+    }
 
 
 def test_express_refuses_an_unmapped_symbol_before_spending() -> None:
@@ -292,10 +325,65 @@ def test_express_refuses_an_unmapped_symbol_before_spending() -> None:
     )
 
     completed = asyncio.run(
-        run_task(task, [], InMemoryCheckpointStore(), PerformanceStore({}), NeverCalled())
+        run_task(task, [_express_vendor()], InMemoryCheckpointStore(), PerformanceStore({}), NeverCalled())
     )
     assert completed.state != JobState.READY_TO_SETTLE
     assert completed.deliverable is None
+
+
+def test_express_records_an_unusable_paid_series_as_absorbed_not_charged() -> None:
+    class EmptyPaidSeries:
+        async def pay_and_call(self, request):
+            return PayAndCallResponse(
+                ok=True,
+                result={"code": "0", "msg": "", "data": "[]"},
+                receipt=PayAndCallReceipt(
+                    amount=Money.usdt(15), tx="0xabsorbed", payment_response="e30="
+                ),
+            )
+
+        async def refund(self, task_id, to_address, amount):
+            raise AssertionError("an unsettled buyer authorization must not be refunded")
+
+    quote = Quote(
+        quote_id="qx_unusable",
+        price=Money.usdt(100_000),
+        plan_summary=[{"subtask": "market_snapshot", "capability": "market_snapshot"}],
+        valid_until=datetime.now(timezone.utc),
+        pricing_mode="QUOTED_AMOUNT",
+        express=True,
+        buyer_address="0xbuyer",
+    )
+    task = FirmTask(
+        task_id="t_unusable",
+        goal="Firm Express: market_snapshot",
+        quote=quote,
+        params={"symbol": "ETH", "timeframe": "4h", "prompt": "market snapshot"},
+        state=JobState.AUTHORIZED,
+    )
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            [_express_vendor()],
+            InMemoryCheckpointStore(),
+            PerformanceStore({}),
+            EmptyPaidSeries(),
+        )
+    )
+
+    assert completed.state == JobState.FAILED_NOT_CHARGED
+    assert completed.provenance is not None
+    assert completed.provenance.guarantee_status == "not_charged"
+    assert completed.provenance.hires[0].cost.units() == 15
+    assert completed.provenance.vendors_fired[0].cost_absorbed.units() == 15
+    assert completed.provenance.economics.actual_vendor_costs.units() == 15
+    assert completed.provenance.economics.margin_retained_or_absorbed == {
+        "amount": "15",
+        "sign": "absorbed",
+    }
+    assert len(completed.attempts) == 1
+    assert completed.attempts[0].outcome == "fired"
 
 
 def test_multi_subtask_job_refunds_if_any_subtask_cannot_be_filled() -> None:

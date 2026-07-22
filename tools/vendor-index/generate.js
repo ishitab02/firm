@@ -68,12 +68,20 @@ export function inferCapability(service) {
     "support/resistance"
   ];
   const rawCryptoSeries = ["kline", "k-line", "candlestick", "ohlc"];
+  // A paid token-price history is a valid raw input even when the vendor does
+  // not claim to compute the technical analysis itself. The Firm buys the
+  // series and derives trend/support/resistance. Keep this narrow so metadata,
+  // balances, ETF flows, realtime-only prices, and generic reports stay out.
+  const paidTokenPriceSeries = ["historical token price", "token price history"];
   if (
-    cryptoContext.some((keyword) => text.includes(keyword)) &&
-    priceSeries.some((keyword) => text.includes(keyword)) &&
+    paidTokenPriceSeries.some((keyword) => text.includes(keyword)) ||
     (
-      technical.some((keyword) => text.includes(keyword)) ||
-      rawCryptoSeries.some((keyword) => text.includes(keyword))
+      cryptoContext.some((keyword) => text.includes(keyword)) &&
+      priceSeries.some((keyword) => text.includes(keyword)) &&
+      (
+        technical.some((keyword) => text.includes(keyword)) ||
+        rawCryptoSeries.some((keyword) => text.includes(keyword))
+      )
     )
   ) {
     return "market_snapshot";

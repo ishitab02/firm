@@ -41,6 +41,7 @@ async def run_task(
     durable_hires = [
         HireReceipt(
             agent_id=attempt.agent_id,
+            name=attempt.agent_name,
             subtask=attempt.subtask,
             cost=attempt.cost,
             tx=attempt.tx,

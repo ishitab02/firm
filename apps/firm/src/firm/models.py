@@ -59,9 +59,10 @@ class Quote(BaseModel):
     # refund pays back the real buyer. None on bypassed runs (no real payer),
     # where the refund falls back to the configured default address.
     buyer_address: str | None = None
-    # Express verifies an x402 authorization first, fulfils from a free public
-    # data source, and settles only after validation. The worker needs this bit
-    # to avoid treating an unsettled authorization as a refundable payment.
+    # Express verifies an inbound authorization, buys its raw series from a
+    # marketplace vendor, derives and validates the result, then settles the
+    # buyer authorization. The worker needs this bit to avoid treating an
+    # unsettled inbound authorization as a refundable buyer payment.
     express: bool = False
 
 
@@ -163,6 +164,7 @@ class VendorFiring(BaseModel):
 
 class HireReceipt(BaseModel):
     agent_id: str
+    name: str | None = None
     subtask: str
     cost: Money
     tx: str
@@ -173,6 +175,7 @@ class ProcurementAttempt(BaseModel):
     """Durable record of every vendor payment and its validation outcome."""
 
     agent_id: str
+    agent_name: str | None = None
     subtask: str
     endpoint: str
     result: dict[str, Any]

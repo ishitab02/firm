@@ -1,15 +1,15 @@
 {
-  "generated_at": "2026-07-22T13:06:05.333Z",
+  "generated_at": "2026-07-22T14:29:15.961Z",
   "provenance": {
     "scan_file": "data/marketplace-scan.json",
     "scanned_at": "2026-07-20T07:50:09.698Z",
     "scan_source": "onchainos agent search",
     "agents_in_scan": 218,
     "agents_without_callable_endpoint_skipped": 123,
-    "agents_without_a_usable_service_skipped": 94,
+    "agents_without_a_usable_service_skipped": 93,
     "agents_without_a_resolvable_score_skipped": 0,
     "services_with_unresolved_price": 0,
-    "services_dropped_uncategorised": 390,
+    "services_dropped_uncategorised": 389,
     "services_dropped_unpriced": 0,
     "dropped_services_note": "apps/firm VendorIndexEntry requires a string capability and a price per service; services missing either are dropped here so they cannot invalidate the whole index. They remain in the raw scan.",
     "capability_inference": "keyword rules in tools/vendor-index/generate.js; every service carries capability_source",
@@ -117,7 +117,7 @@
       ],
       "services_dropped": 75,
       "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 1520,
@@ -126,15 +126,53 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z",
-      "kya_base_score_original": 100,
-      "measured_health": {
-        "verdict": "X402_OK",
-        "hireable": true,
-        "checked_at": "2026-07-21T13:44:35.461Z",
-        "detail": "live and conformant at 1000 base units via exact",
-        "treatment": "live and correctly challenging for payment"
-      }
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
+    },
+    {
+      "agent_id": "2023",
+      "name": "Onchain Data Explorer",
+      "endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history",
+      "chain_index": 196,
+      "communication_address": "0x0F1375cF76E56dFD559830183C8ed4EeAE7e7682",
+      "services": [
+        {
+          "tool": "Historical Token Price",
+          "service_id": "17307",
+          "service_type": "A2MCP",
+          "endpoint": "https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history",
+          "price": {
+            "amount": "15",
+            "decimals": 6,
+            "token": "USDT"
+          },
+          "price_unresolved_reason": null,
+          "fee_amount_declared": 0.000015,
+          "fee_token": "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+          "capability": "market_snapshot",
+          "capability_source": "inferred_from_service_name_and_description",
+          "description": "Historical token price — POST.\nPOST only (GET=405). Requires chainIndex, tokenAddress. Optional granularity=1m|5m|30m|1h|1D, limit.\ne.g. POST {\"chainIndex\":\"1\",\"tokenAddress\":\"0x...\",\"granularity\":\"1D\"}",
+          "documented_example_args": {
+            "args": {
+              "chainIndex": "1",
+              "tokenAddress": "0x...",
+              "granularity": "1D"
+            },
+            "source": "verbatim_json_literal_in_vendor_service_description"
+          }
+        }
+      ],
+      "services_dropped": 34,
+      "kya_base_score": 93,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "marketplace_feedback_rate": 92.86,
+      "marketplace_security_rate": 4.86,
+      "sold_count": 1572,
+      "categories": [
+        "Software services"
+      ],
+      "flags": [],
+      "flags_source": "derived_by_tools/vendor-index/generate.js",
+      "last_verified_at": "2026-07-20T07:50:09.698Z"
     }
   ]
 }

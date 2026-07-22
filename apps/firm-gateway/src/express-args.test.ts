@@ -39,6 +39,22 @@ describe("Firm Express request contract", () => {
     expect(expressInputFailure(call!)).toContain("unsupported timeframe");
   });
 
+  it("rejects symbols without a paid, verified token mapping", () => {
+    const call = normaliseExpressArgs({
+      job_type: "market_snapshot",
+      params: { symbol: "DOGE", timeframe: "4h", prompt: "snapshot" }
+    });
+    expect(expressInputFailure(call!)).toContain("supported: BTC, ETH");
+  });
+
+  it("does not advertise intraday periods the paid source cannot fulfil", () => {
+    const call = normaliseExpressArgs({
+      job_type: "market_snapshot",
+      params: { symbol: "ETH", timeframe: "15m", prompt: "snapshot" }
+    });
+    expect(expressInputFailure(call!)).toContain("supported: 1h, 2h, 4h, 1d");
+  });
+
   it("rejects prompts outside the listed market-snapshot product", () => {
     const call = normaliseExpressArgs({
       job_type: "market_snapshot",

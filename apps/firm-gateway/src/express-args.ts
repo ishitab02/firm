@@ -65,9 +65,11 @@ export function expressJobTypes(): string[] {
 
 export type ExpressArgs = { job_type: string; params: Record<string, unknown> };
 
-const SUPPORTED_MARKET_TIMEFRAMES = new Set([
-  "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"
-]);
+export const SUPPORTED_MARKET_SYMBOLS = ["BTC", "ETH"] as const;
+export const SUPPORTED_MARKET_TIMEFRAMES = ["1h", "2h", "4h", "1d"] as const;
+
+const supportedSymbols = new Set<string>(SUPPORTED_MARKET_SYMBOLS);
+const supportedTimeframes = new Set<string>(SUPPORTED_MARKET_TIMEFRAMES);
 
 /** A free, deterministic precondition check run before any authorization settles. */
 export function expressInputFailure(call: ExpressArgs): string | null {
@@ -76,9 +78,13 @@ export function expressInputFailure(call: ExpressArgs): string | null {
   const timeframe = call.params.timeframe;
   const prompt = call.params.prompt;
   if (typeof symbol !== "string" || !symbol.trim()) return "symbol is required";
+  const normalisedSymbol = symbol.trim().toUpperCase().replace(/(?:-|\/)USDT$/, "");
+  if (!supportedSymbols.has(normalisedSymbol)) {
+    return `unsupported symbol ${JSON.stringify(symbol)}; supported: ${SUPPORTED_MARKET_SYMBOLS.join(", ")}`;
+  }
   if (typeof timeframe !== "string" || !timeframe.trim()) return "timeframe is required";
-  if (!SUPPORTED_MARKET_TIMEFRAMES.has(timeframe.trim().toLowerCase())) {
-    return `unsupported timeframe ${JSON.stringify(timeframe)}`;
+  if (!supportedTimeframes.has(timeframe.trim().toLowerCase())) {
+    return `unsupported timeframe ${JSON.stringify(timeframe)}; supported: ${SUPPORTED_MARKET_TIMEFRAMES.join(", ")}`;
   }
   if (typeof prompt !== "string" || !prompt.trim()) return "prompt is required";
   const supportedFocus = ["price", "trend", "support", "resistance", "market", "snapshot", "technical"];

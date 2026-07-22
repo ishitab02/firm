@@ -59,14 +59,14 @@ function pricingMode(): PricingMode {
  * Firm Express config.
  *
  * OFF by default so a new environment must explicitly opt into the paid API
- * after verifying its database, worker, public candle access, and facilitator.
+ * after verifying its database, worker, paid OKLink procurement, and facilitator.
  */
 function expressEnabled(): boolean {
   return process.env.EXPRESS_ENABLED === "true";
 }
-/** Fixed Express price in base units. INTERFACES §1A placeholder: 0.5 USDT. */
+/** Fixed Express price in base units. The live listing is 0.1 USDT. */
 function expressPriceUnits(): string {
-  return process.env.EXPRESS_PRICE_UNITS ?? "500000";
+  return process.env.EXPRESS_PRICE_UNITS ?? "100000";
 }
 /** How long express_run waits for the synchronous result before returning PENDING. */
 function expressTimeoutMs(): number {
@@ -285,10 +285,8 @@ async function toolCall(
       express: true,
       buyer_address: buyerAddress
     };
-    // params reach the vendor verbatim. INTERFACES §1A defines express_run as
-    // taking them, and real vendors have real schemas — OKLink requires
-    // chainIndex/address/height. Parsing them and dropping them, as this did,
-    // meant the worker sent a generic body and The Firm paid for the 400.
+    // Persist the buyer's contract verbatim. The worker validates it, then maps
+    // it to OKLink's documented chainIndex/tokenAddress/granularity schema.
     await pool().query(
       `INSERT INTO firm_jobs
        (task_id, quote_id, state, goal, quote, params, progress, deliverable, provenance, refund)
@@ -319,7 +317,7 @@ async function toolCall(
           deliverable: row.deliverable,
           receipt: {
             vendor: hire ? { agent_id: hire.agent_id, name: hire.name ?? null } : null,
-            data_source: hire ? null : "OKX public candlesticks",
+            data_source: Array.isArray(prov.data_sources) ? (prov.data_sources[0] ?? null) : null,
             vendor_cost: hire?.cost ?? { amount: "0", decimals: 6, token: "USDT" },
             vendor_tx: hire?.tx ?? null,
             validation: hire?.validation ?? {
@@ -402,7 +400,7 @@ async function chargeGate(
           error: {
             code: "EXPRESS_NOT_ENABLED",
             detail:
-              "Firm Express is disabled in this environment; enable it only after the worker, public market-data source, and x402 facilitator pass their readiness checks."
+              "Firm Express is disabled in this environment; enable it only after the worker, paid OKLink source, and x402 facilitator pass their readiness checks."
           }
         }
       };
@@ -692,7 +690,23 @@ const server = http.createServer(async (req, res) => {
         await pool().query(
           `UPDATE firm_jobs
            SET state = 'failed_not_charged', deliverable = NULL,
-               provenance = jsonb_set(COALESCE(provenance, '{}'::jsonb), '{guarantee_status}', '"not_charged"'::jsonb),
+               provenance = jsonb_set(
+                 jsonb_set(
+                   COALESCE(provenance, '{}'::jsonb),
+                   '{guarantee_status}',
+                   '"not_charged"'::jsonb
+                 ),
+                 '{economics,margin_retained_or_absorbed}',
+                 jsonb_build_object(
+                   'amount',
+                   (
+                     COALESCE(provenance #>> '{economics,actual_vendor_costs,amount}', '0')::numeric
+                     + COALESCE(provenance #>> '{books,cost,amount}', '0')::numeric
+                   )::text,
+                   'sign',
+                   'absorbed'
+                 )
+               ),
                updated_at = now()
            WHERE task_id = $1 AND state = 'ready_to_settle'`,
           [settlementTaskId]
