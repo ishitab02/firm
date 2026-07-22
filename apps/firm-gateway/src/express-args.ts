@@ -71,6 +71,48 @@ export const SUPPORTED_MARKET_TIMEFRAMES = ["1h", "2h", "4h", "1d"] as const;
 const supportedSymbols = new Set<string>(SUPPORTED_MARKET_SYMBOLS);
 const supportedTimeframes = new Set<string>(SUPPORTED_MARKET_TIMEFRAMES);
 
+/**
+ * What a buyer must POST, declared in the 402 challenge itself.
+ *
+ * The enums are the SAME constants `expressInputFailure` validates against, not
+ * a restatement of them. They were restated once and drifted: the challenge
+ * advertised twelve timeframes (`1m` … `1w`) while the endpoint accepted four.
+ * A machine buyer reading the schema would have requested `15m`, been refused,
+ * and reasonably concluded the service does not do what it advertises — the
+ * exact impression a reviewer forms right before a rejection. Deriving both
+ * from one constant makes that drift unrepresentable, and the test below pins
+ * it so a future edit to one cannot silently miss the other.
+ *
+ * `type: "http"` and `method: "POST"` matter as much as the field list. Buyer
+ * tooling probes GET by default; with no declared method an automated buyer
+ * never learns how to call the paid endpoint, which surfaces as "paid replay
+ * returned no content" rather than as a schema problem.
+ *
+ * Lives here rather than in server.ts so it can be tested without importing a
+ * module that binds a port at import time.
+ */
+export const EXPRESS_HTTP_INPUT = {
+  type: "http",
+  method: "POST",
+  bodyType: "json",
+  body: {
+    type: "object",
+    required: ["symbol", "timeframe", "prompt"],
+    properties: {
+      symbol: {
+        type: "string",
+        enum: [...SUPPORTED_MARKET_SYMBOLS],
+        description: "Crypto base symbol"
+      },
+      timeframe: { type: "string", enum: [...SUPPORTED_MARKET_TIMEFRAMES] },
+      prompt: {
+        type: "string",
+        description: "Requested market-analysis focus, e.g. price, trend, support, resistance"
+      }
+    }
+  }
+} as const;
+
 /** A free, deterministic precondition check run before any authorization settles. */
 export function expressInputFailure(call: ExpressArgs): string | null {
   if (call.job_type !== "market_snapshot") return `unsupported Express job type ${call.job_type}`;

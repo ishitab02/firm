@@ -16,7 +16,13 @@ import {
 } from "./charging.js";
 import { ensureGatewayTables, pool } from "./db.js";
 import { mcpDispatch, TOOL_DEFINITIONS } from "./mcp.js";
-import { directExpressCall, expressInputFailure, expressJobTypes, normaliseExpressArgs } from "./express-args.js";
+import {
+  directExpressCall,
+  EXPRESS_HTTP_INPUT,
+  expressInputFailure,
+  expressJobTypes,
+  normaliseExpressArgs
+} from "./express-args.js";
 import { fulfilmentFailure, readFulfilmentMode } from "./fulfilment.js";
 import { quotePrice, estimatePlan, PricingMode } from "./pricing.js";
 import { usdt, units } from "./money.js";
@@ -121,21 +127,6 @@ type DeferredCharge = {
   requirements: PaymentRequirements;
   payer: string;
   facilitatorUrl: string;
-};
-
-const EXPRESS_HTTP_INPUT = {
-  type: "http",
-  method: "POST",
-  bodyType: "json",
-  body: {
-    type: "object",
-    required: ["symbol", "timeframe", "prompt"],
-    properties: {
-      symbol: { type: "string", description: "Crypto base symbol, e.g. ETH" },
-      timeframe: { type: "string", enum: ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"] },
-      prompt: { type: "string", description: "Requested market-analysis focus" }
-    }
-  }
 };
 
 /**
