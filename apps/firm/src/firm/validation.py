@@ -190,6 +190,95 @@ def _payload_text(deliverable: dict[str, Any]) -> str:
     return " ".join(parts).strip()
 
 
+def market_snapshot_failures(
+    deliverable: dict[str, Any], request: dict[str, Any] | None
+) -> list[ValidationFailure]:
+    """Validate the exact product contract sold by Firm Express.
+
+    A symbol mention is not enough. An Ethereum ETF-flow table mentions ETH but
+    still contains no ETH/USDT timeframe, price action, trend, support, or
+    resistance. Those fields are the paid product, so each is required and the
+    identifying fields must match the request exactly.
+    """
+    if not request:
+        return []
+
+    failures: list[ValidationFailure] = []
+    raw_symbol = request.get("symbol") or request.get("asset") or request.get("ticker")
+    raw_timeframe = request.get("timeframe")
+    raw_prompt = request.get("prompt")
+    if not isinstance(raw_symbol, str) or not raw_symbol.strip():
+        failures.append(ValidationFailure(check="request_contract", detail="market snapshot request has no symbol"))
+    if not isinstance(raw_timeframe, str) or not raw_timeframe.strip():
+        failures.append(ValidationFailure(check="request_contract", detail="market snapshot request has no timeframe"))
+    if not isinstance(raw_prompt, str) or not raw_prompt.strip():
+        failures.append(ValidationFailure(check="request_contract", detail="market snapshot request has no prompt"))
+    if failures:
+        return failures
+
+    wanted_symbol = raw_symbol.strip().upper().removesuffix("/USDT").removesuffix("-USDT")
+    actual_symbol = deliverable.get("symbol")
+    if not isinstance(actual_symbol, str) or actual_symbol.strip().upper() != wanted_symbol:
+        failures.append(
+            ValidationFailure(
+                check="asset_match",
+                detail=f"expected symbol {wanted_symbol}, got {actual_symbol!r}",
+            )
+        )
+
+    wanted_timeframe = raw_timeframe.strip().lower()
+    actual_timeframe = deliverable.get("timeframe")
+    if not isinstance(actual_timeframe, str) or actual_timeframe.strip().lower() != wanted_timeframe:
+        failures.append(
+            ValidationFailure(
+                check="timeframe_match",
+                detail=f"expected timeframe {wanted_timeframe}, got {actual_timeframe!r}",
+            )
+        )
+
+    actual_prompt = deliverable.get("prompt")
+    if not isinstance(actual_prompt, str) or actual_prompt.strip() != raw_prompt.strip():
+        failures.append(
+            ValidationFailure(
+                check="prompt_match",
+                detail="deliverable does not identify the exact buyer prompt it fulfilled",
+            )
+        )
+
+    required = {
+        "price": (int, float),
+        "price_action": str,
+        "trend": (str, dict),
+        "support": (int, float, dict),
+        "resistance": (int, float, dict),
+    }
+    for field, expected_type in required.items():
+        value = deliverable.get(field)
+        if not isinstance(value, expected_type) or value in ("", {}, []):
+            failures.append(
+                ValidationFailure(
+                    check="content_contract",
+                    detail=f"market snapshot is missing substantive {field}",
+                )
+            )
+
+    # A fund-flow response can mention the right chain asset and therefore pass
+    # a token heuristic. If the buyer did not ask for funds/ETFs, these terms
+    # identify the exact wrong product that caused the paid rejection.
+    prompt = raw_prompt.lower()
+    text = _payload_text(deliverable).lower()
+    asked_for_funds = "etf" in prompt or "fund flow" in prompt or "fund-flow" in prompt
+    fund_markers = ("etf", "issuer", "netinflow", "fund holdings", "totalnav")
+    if not asked_for_funds and any(marker in text for marker in fund_markers):
+        failures.append(
+            ValidationFailure(
+                check="topic_match",
+                detail="buyer requested spot price analysis but output is an ETF/fund dataset",
+            )
+        )
+    return failures
+
+
 def validate(deliverable: dict[str, Any], subtask_spec: dict[str, Any]) -> ValidationResult:
     """Deterministic validation stack (INTERFACES §6).
 
@@ -228,6 +317,19 @@ def validate(deliverable: dict[str, Any], subtask_spec: dict[str, Any]) -> Valid
     off_topic = relevance_failure(payload_text, subtask_spec.get("request"))
     if off_topic is not None:
         failures.append(ValidationFailure(check="relevance", detail=off_topic))
+
+    if subtask_spec.get("acceptance") == "market_snapshot" and subtask_spec.get("request"):
+        checks_run.extend(
+            [
+                "request_contract",
+                "asset_match",
+                "timeframe_match",
+                "prompt_match",
+                "content_contract",
+                "topic_match",
+            ]
+        )
+        failures.extend(market_snapshot_failures(deliverable, subtask_spec.get("request")))
 
     generated_at = deliverable.get("generated_at")
     if generated_at:

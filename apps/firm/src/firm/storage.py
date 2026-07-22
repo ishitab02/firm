@@ -65,6 +65,14 @@ class InMemoryCheckpointStore:
                     "provenance": task.provenance.model_dump(mode="json"),
                 }
             }
+        if task.state == JobState.FAILED_NOT_CHARGED:
+            return {
+                "error": {
+                    "code": "FAILED_NOT_CHARGED",
+                    "detail": "fulfilment or settlement failed before buyer funds moved",
+                    "provenance": task.provenance.model_dump(mode="json") if task.provenance else None,
+                }
+            }
         result = self.get_result(task_id)
         if result is None:
             return {"error": {"code": "NOT_READY_OR_NOT_FOUND"}}
@@ -101,7 +109,7 @@ class PostgresCheckpointStore:
                 cursor.execute(
                     """
                     SELECT task_id, goal, quote, params, state, progress,
-                           deliverable, provenance, refund
+                           deliverable, provenance, refund, attempts
                     FROM firm_jobs
                     WHERE task_id = %s
                     """,
@@ -159,6 +167,14 @@ class PostgresCheckpointStore:
                     "provenance": task.provenance.model_dump(mode="json"),
                 }
             }
+        if task.state == JobState.FAILED_NOT_CHARGED:
+            return {
+                "error": {
+                    "code": "FAILED_NOT_CHARGED",
+                    "detail": "fulfilment or settlement failed before buyer funds moved",
+                    "provenance": task.provenance.model_dump(mode="json") if task.provenance else None,
+                }
+            }
         result = self.get_result(task_id)
         if result is None:
             return {"error": {"code": "NOT_READY_OR_NOT_FOUND"}}
@@ -166,7 +182,7 @@ class PostgresCheckpointStore:
 
     def claim_next_task(
         self,
-        claimable_states: tuple[JobState, ...] = (JobState.PAID,),
+        claimable_states: tuple[JobState, ...] = (JobState.PAID, JobState.AUTHORIZED),
         stale_states: tuple[JobState, ...] = (
             JobState.PLANNING,
             JobState.SOURCING,
@@ -196,18 +212,25 @@ class PostgresCheckpointStore:
                       LIMIT 1
                     )
                     UPDATE firm_jobs
-                    SET state = %s, updated_at = now()
+                    SET state = CASE
+                                  WHEN firm_jobs.state = %s THEN %s
+                                  ELSE %s
+                                END,
+                        updated_at = now()
                     FROM next_job
                     WHERE firm_jobs.task_id = next_job.task_id
                     RETURNING firm_jobs.task_id, firm_jobs.goal, firm_jobs.quote,
                               firm_jobs.params,
                               firm_jobs.state, firm_jobs.progress,
-                              firm_jobs.deliverable, firm_jobs.provenance, firm_jobs.refund
+                              firm_jobs.deliverable, firm_jobs.provenance, firm_jobs.refund,
+                              firm_jobs.attempts
                     """,
                     (
                         [state.value for state in claimable_states],
                         [state.value for state in stale_states],
                         stale_after_seconds,
+                        JobState.REFUNDING.value,
+                        JobState.REFUNDING.value,
                         JobState.PLANNING.value,
                     ),
                 )
@@ -222,13 +245,26 @@ class PostgresCheckpointStore:
                 cursor.execute(
                     """
                     UPDATE firm_jobs
-                    SET state = %s, updated_at = now()
+                    SET state = CASE
+                                  WHEN state = %s THEN %s
+                                  ELSE %s
+                                END,
+                        updated_at = now()
                     WHERE task_id = %s
-                      AND state IN (%s, %s)
+                      AND state IN (%s, %s, %s, %s)
                     RETURNING task_id, goal, quote, params, state, progress,
-                              deliverable, provenance, refund
+                              deliverable, provenance, refund, attempts
                     """,
-                    (JobState.PLANNING.value, task_id, JobState.PAID.value, JobState.PLANNING.value),
+                    (
+                        JobState.REFUNDING.value,
+                        JobState.REFUNDING.value,
+                        JobState.PLANNING.value,
+                        task_id,
+                        JobState.PAID.value,
+                        JobState.AUTHORIZED.value,
+                        JobState.PLANNING.value,
+                        JobState.REFUNDING.value,
+                    ),
                 )
                 row = cursor.fetchone()
         if row is None:
@@ -261,9 +297,9 @@ class PostgresCheckpointStore:
             """
             INSERT INTO firm_jobs (
               task_id, quote_id, state, goal, quote, params,
-              progress, deliverable, provenance, refund, updated_at
+              progress, deliverable, provenance, refund, attempts, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
             ON CONFLICT (task_id) DO UPDATE SET
               state = EXCLUDED.state,
               goal = EXCLUDED.goal,
@@ -273,6 +309,7 @@ class PostgresCheckpointStore:
               deliverable = EXCLUDED.deliverable,
               provenance = EXCLUDED.provenance,
               refund = EXCLUDED.refund,
+              attempts = EXCLUDED.attempts,
               updated_at = now()
             """,
             (
@@ -286,6 +323,7 @@ class PostgresCheckpointStore:
                 Jsonb(task.deliverable),
                 Jsonb(task.provenance.model_dump(mode="json") if task.provenance else None),
                 Jsonb(task.refund),
+                Jsonb([attempt.model_dump(mode="json") for attempt in task.attempts]),
             ),
         )
 

@@ -36,37 +36,47 @@ const outputPath = process.env.VENDOR_INDEX_OUT ?? "data/vendor-index.json";
  * Every entry carries capability_source so a reader can tell an inference from
  * a curated fact.
  */
-const CAPABILITY_RULES = [
-  {
-    capability: "market_snapshot",
-    keywords: [
-      "market",
-      "snapshot",
-      "price",
-      "ohlc",
-      "chart",
-      "trading",
-      "liquidity",
-      "sentiment",
-      "news",
-      "research",
-      "report",
-      "analysis",
-      "data"
-    ]
-  },
-  {
-    capability: "token_launch",
-    keywords: ["launch", "token creation", "deploy", "tokenomics", "presale", "mint", "issuance"]
-  }
-];
-
-function inferCapability(service) {
+export function inferCapability(service) {
   const text = `${service.serviceName ?? ""} ${service.serviceDescription ?? ""}`.toLowerCase();
-  // token_launch is checked first: its keywords are far more specific, so a
-  // launch service that also mentions "market" should not be filed as research.
-  for (const rule of [...CAPABILITY_RULES].reverse()) {
-    if (rule.keywords.some((keyword) => text.includes(keyword))) return rule.capability;
+  const tokenLaunch = [
+    "token launch",
+    "launch token",
+    "token creation",
+    "presale",
+    "token issuance",
+    "mint a token",
+    "create a token"
+  ];
+  if (tokenLaunch.some((keyword) => text.includes(keyword))) return "token_launch";
+  if (["stock", "equity", "etf", "prediction market", "polymarket"].some((keyword) => text.includes(keyword))) {
+    return null;
+  }
+  // market_snapshot is a product contract, not a bag-of-words category. The
+  // former rule included "market", "data", "news", and "analysis", which
+  // classified ETF holdings, prediction markets, and generic reports as crypto
+  // technical snapshots. Require crypto/spot context plus both price-series and
+  // technical-analysis signals. Unknown stays null; no real money is spent on
+  // an inference that the vendor never promised.
+  const cryptoContext = ["crypto", "token", "btc", "bitcoin", "eth", "ethereum", "spot", "trading pair", "symbol"];
+  const priceSeries = ["price action", "candlestick", "candle", "ohlc", "price history", "kline", "k-line"];
+  const technical = [
+    "trend",
+    "momentum",
+    "technical analysis",
+    "price action",
+    "support and resistance",
+    "support/resistance"
+  ];
+  const rawCryptoSeries = ["kline", "k-line", "candlestick", "ohlc"];
+  if (
+    cryptoContext.some((keyword) => text.includes(keyword)) &&
+    priceSeries.some((keyword) => text.includes(keyword)) &&
+    (
+      technical.some((keyword) => text.includes(keyword)) ||
+      rawCryptoSeries.some((keyword) => text.includes(keyword))
+    )
+  ) {
+    return "market_snapshot";
   }
   return null;
 }

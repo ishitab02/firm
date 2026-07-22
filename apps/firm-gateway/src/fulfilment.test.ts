@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { fulfilmentFailure } from "./fulfilment.js";
 
-const live = { realPayments: true, realRefunds: true, walletKeyPresent: true };
+const live = { realPayments: true, realRefunds: true, walletKeyPresent: true, refundReady: true };
 
 /**
  * The incoherent pairing: the gateway takes real money while the procurer
@@ -13,7 +13,7 @@ describe("fulfilment coherence", () => {
   it("refuses to charge real money while the procurer simulates", () => {
     const reason = fulfilmentFailure({
       charging: true,
-      mode: { realPayments: false, realRefunds: false, walletKeyPresent: false }
+      mode: { realPayments: false, realRefunds: false, walletKeyPresent: false, refundReady: false }
     });
     expect(reason).toMatch(/SIMULATION mode/);
   });
@@ -28,7 +28,7 @@ describe("fulfilment coherence", () => {
   it("refuses when real payments are on but no wallet key is loaded", () => {
     const reason = fulfilmentFailure({
       charging: true,
-      mode: { realPayments: true, realRefunds: true, walletKeyPresent: false }
+      mode: { realPayments: true, realRefunds: true, walletKeyPresent: false, refundReady: false }
     });
     expect(reason).toMatch(/no wallet key/);
   });
@@ -36,9 +36,23 @@ describe("fulfilment coherence", () => {
   it("refuses paid work while the automatic refund path is disabled", () => {
     const reason = fulfilmentFailure({
       charging: true,
-      mode: { realPayments: true, realRefunds: false, walletKeyPresent: true }
+      mode: { realPayments: true, realRefunds: false, walletKeyPresent: true, refundReady: false }
     });
     expect(reason).toMatch(/real refunds disabled/);
+  });
+
+  it("refuses paid work when refunds are armed but the signer lacks gas", () => {
+    const reason = fulfilmentFailure({
+      charging: true,
+      mode: {
+        realPayments: true,
+        realRefunds: true,
+        walletKeyPresent: true,
+        refundReady: false,
+        refundReadinessDetail: "refund wallet gas shortfall"
+      }
+    });
+    expect(reason).toContain("gas shortfall");
   });
 
   it("allows the coherent live pairing", () => {
@@ -52,7 +66,7 @@ describe("fulfilment coherence", () => {
     expect(
       fulfilmentFailure({
         charging: false,
-        mode: { realPayments: false, realRefunds: false, walletKeyPresent: false }
+        mode: { realPayments: false, realRefunds: false, walletKeyPresent: false, refundReady: false }
       })
     ).toBe(null);
   });

@@ -58,11 +58,23 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "express_run",
-    description: "Paid, fixed price. Single-vendor instant execution for a repeatable job type.",
+    description:
+      "Paid, fixed price. Exact crypto market snapshot from public candles; validates symbol, timeframe, price action, trend, support and resistance before settlement.",
     inputSchema: {
       type: "object",
-      required: ["job_type"],
-      properties: { job_type: { type: "string" }, params: { type: "object" } }
+      required: ["job_type", "params"],
+      properties: {
+        job_type: { type: "string", enum: ["market_snapshot"] },
+        params: {
+          type: "object",
+          required: ["symbol", "timeframe", "prompt"],
+          properties: {
+            symbol: { type: "string" },
+            timeframe: { type: "string" },
+            prompt: { type: "string" }
+          }
+        }
+      }
     }
   }
 ];

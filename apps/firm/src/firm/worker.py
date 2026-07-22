@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import Settings
-from .graph import FirmGraphState, build_graph
+from .graph import FirmGraphState, booking_node, build_graph, refunding_node
 from .health import Heartbeat, serve_health
-from .models import FirmTask, VendorIndexEntry
+from .models import FirmTask, HireReceipt, JobState, VendorFiring, VendorIndexEntry
 from .procurer import HttpProcurer, Procurer
 from .sourcing import load_vendor_index
 from .storage import PostgresCheckpointStore, PostgresPerformanceStore
@@ -38,16 +38,44 @@ async def run_task(
     performance: PostgresPerformanceStore,
     procurer: Procurer,
 ) -> FirmTask:
+    durable_hires = [
+        HireReceipt(
+            agent_id=attempt.agent_id,
+            subtask=attempt.subtask,
+            cost=attempt.cost,
+            tx=attempt.tx,
+            validation=attempt.validation,
+        )
+        for attempt in task.attempts
+    ]
+    durable_firings = [
+        VendorFiring(
+            agent_id=attempt.agent_id,
+            subtask=attempt.subtask,
+            reason=attempt.reason or "validation failed",
+            cost_absorbed=attempt.cost,
+        )
+        for attempt in task.attempts
+        if attempt.outcome == "fired"
+    ]
     state: FirmGraphState = {
         "task": task,
         "vendors": vendors,
         "rejected": [],
-        "fired": [],
-        "hires": [],
+        "fired": durable_firings,
+        "hires": durable_hires,
         "store": store,
         "performance": performance,
         "procurer": procurer,
     }
+    if task.state == JobState.REFUNDING:
+        # A stale refund is a resumable money operation, not a new job. Starting
+        # the graph at planning would source and pay vendors again while the
+        # original buyer is still owed money.
+        resumed = await refunding_node(state)
+        if resumed["task"].state == JobState.REFUNDED:
+            booking_node(resumed)
+        return resumed["task"]
     # Drive the run through the compiled LangGraph. Nodes mutate the shared task
     # and checkpoint every transition to Postgres; the conditional edge out of
     # `validating` routes delivered jobs to assembly and failed ones to refund.

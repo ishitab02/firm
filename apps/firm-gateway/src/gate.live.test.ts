@@ -75,7 +75,8 @@ async function startFulfilmentStub() {
         service: "firm-procurer",
         real_payments_enabled: true,
         real_refunds_enabled: true,
-        wallet_key_present: true
+        wallet_key_present: true,
+        refund_ready: true
       })
     );
   });
@@ -104,7 +105,7 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
         CHARGING_MODE: "enforce",
         PROCURER_URL: await startFulfilmentStub(),
         FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
-        FIRM_CHARGE_ASSET: "0xassettest",
+        FIRM_CHARGE_ASSET: "0x779ded0c9e1022225f8e0630b35a9b54be713736",
         FIRM_CHARGE_NETWORK: "eip155:196"
         // X402_FACILITATOR_URL deliberately unset: an unverifiable payment must
         // be treated exactly like no payment.
@@ -211,7 +212,7 @@ suite("gateway express boundary (EXPRESS_ENABLED, CHARGING_MODE=enforce)", () =>
         EXPRESS_JOB_TYPES: "market_snapshot",
         EXPRESS_PRICE_UNITS: "500000",
         FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
-        FIRM_CHARGE_ASSET: "0xassettest",
+        FIRM_CHARGE_ASSET: "0x779ded0c9e1022225f8e0630b35a9b54be713736",
         FIRM_CHARGE_NETWORK: "eip155:196"
       },
       stdio: "ignore"
@@ -242,6 +243,13 @@ suite("gateway express boundary (EXPRESS_ENABLED, CHARGING_MODE=enforce)", () =>
     const header = attempt.headers.get("payment-required");
     const requirements = JSON.parse(Buffer.from(header as string, "base64").toString("utf8"));
     expect(requirements.accepts[0].amount).toBe("500000");
+    expect(requirements.accepts[0].asset).toBe("0x779ded0c9e1022225f8e0630b35a9b54be713736");
+    expect(requirements.accepts[0].network).toBe("eip155:196");
+    expect(requirements.accepts[0].outputSchema.input.body.required).toEqual([
+      "symbol",
+      "timeframe",
+      "prompt"
+    ]);
 
     const after = await expressDb.query("SELECT count(*)::int AS n FROM firm_jobs WHERE goal LIKE 'Firm Express%'");
     expect(after.rows[0].n).toBe(before.rows[0].n);
@@ -319,9 +327,13 @@ suite("gateway settlement boundary", () => {
         CHARGING_MODE: "enforce",
         PROCURER_URL: await startFulfilmentStub(),
         FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
-        FIRM_CHARGE_ASSET: "0xassettest",
+        FIRM_CHARGE_ASSET: "0x779ded0c9e1022225f8e0630b35a9b54be713736",
         FIRM_CHARGE_NETWORK: "eip155:196",
-        X402_FACILITATOR_URL: `http://127.0.0.1:${facilitatorPort}`
+        X402_FACILITATOR_URL: `http://127.0.0.1:${facilitatorPort}`,
+        EXPRESS_ENABLED: "true",
+        EXPRESS_JOB_TYPES: "market_snapshot",
+        EXPRESS_PRICE_UNITS: "500000",
+        EXPRESS_TIMEOUT_MS: "5000"
       },
       stdio: "ignore"
     });
@@ -394,5 +406,103 @@ suite("gateway settlement boundary", () => {
     expect(result.status).toBe(402);
     const rows = await settleDb.query("SELECT count(*)::int AS n FROM firm_jobs WHERE quote_id = $1", [result.quoteId]);
     expect(rows.rows[0].n).toBe(0);
+  });
+
+  async function waitForAuthorizedExpress() {
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+      const rows = await settleDb.query(
+        "SELECT task_id, state FROM firm_jobs WHERE goal = 'Firm Express: market_snapshot' ORDER BY created_at DESC LIMIT 1"
+      );
+      if (rows.rows[0]?.state === "authorized") return rows.rows[0].task_id as string;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error("Express task never reached authorized");
+  }
+
+  function paidExpress() {
+    return fetch(settleBase, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "PAYMENT-SIGNATURE": Buffer.from(JSON.stringify({ authorization: "valid" })).toString("base64")
+      },
+      body: JSON.stringify({
+        symbol: "ETH",
+        timeframe: "4h",
+        prompt: "price action, trend, support and resistance"
+      })
+    });
+  }
+
+  async function markExpressValidated(taskId: string) {
+    await settleDb.query(
+      `UPDATE firm_jobs
+       SET state = 'ready_to_settle',
+           deliverable = $2::jsonb,
+           provenance = $3::jsonb,
+           updated_at = now()
+       WHERE task_id = $1`,
+      [
+        taskId,
+        JSON.stringify({ result: { symbol: "ETH", timeframe: "4h", price_action: "validated" } }),
+        JSON.stringify({
+          hires: [],
+          economics: { margin_retained_or_absorbed: { amount: "500000", sign: "retained" } },
+          guarantee_status: "delivered"
+        })
+      ]
+    );
+  }
+
+  it("settles Express only after a validated output is ready", async () => {
+    settleBehaviour = "success";
+    paths = [];
+    const pending = paidExpress();
+    const taskId = await waitForAuthorizedExpress();
+    expect(paths).toEqual(["/verify"]);
+
+    await markExpressValidated(taskId);
+    const response = await pending;
+    const body = await response.json() as any;
+    expect(response.status).toBe(200);
+    expect(body.deliverable.result.symbol).toBe("ETH");
+    expect(paths).toEqual(["/verify", "/settle"]);
+    const row = await settleDb.query("SELECT state FROM firm_jobs WHERE task_id = $1", [taskId]);
+    expect(row.rows[0].state).toBe("complete");
+  });
+
+  it("never settles a valid authorization for invalid Express inputs", async () => {
+    settleBehaviour = "success";
+    paths = [];
+    const response = await fetch(settleBase, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "PAYMENT-SIGNATURE": Buffer.from(JSON.stringify({ authorization: "valid" })).toString("base64")
+      },
+      body: JSON.stringify({ symbol: "ETH", timeframe: "4h" })
+    });
+    const body = await response.json() as any;
+    expect(body.error.code).toBe("INVALID_ARGS");
+    expect(paths).toEqual(["/verify"]);
+  });
+
+  it("hides the validated result and records not-charged when settlement fails", async () => {
+    settleBehaviour = "declined";
+    paths = [];
+    const pending = paidExpress();
+    const taskId = await waitForAuthorizedExpress();
+    await markExpressValidated(taskId);
+
+    const response = await pending;
+    expect(response.status).toBe(402);
+    const body = await response.json() as any;
+    expect(body.error.code).toBe("PAYMENT_NOT_SETTLED");
+    const row = await settleDb.query(
+      "SELECT state, deliverable, provenance->>'guarantee_status' AS guarantee FROM firm_jobs WHERE task_id = $1",
+      [taskId]
+    );
+    expect(row.rows[0]).toMatchObject({ state: "failed_not_charged", deliverable: null, guarantee: "not_charged" });
   });
 });

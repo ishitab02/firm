@@ -6,6 +6,7 @@ import { bearerFailure } from "./auth.js";
 import { capsFromEnv } from "./caps.js";
 import {
   ensureTables,
+  markRefundPending,
   markSigned,
   recordSignedFailure,
   releaseCall,
@@ -17,7 +18,13 @@ import {
   spendSnapshot
 } from "./db.js";
 import { units } from "./money.js";
-import { executeRefund, realRefundsEnabled, refundMode } from "./refund.js";
+import {
+  executeRefund,
+  realRefundsEnabled,
+  refundMode,
+  refundReadiness,
+  refundTransactionStatus
+} from "./refund.js";
 import { localSigner } from "./local-signer.js";
 import { payAndCallVendor } from "./vendor.js";
 import { vetVendors } from "./vet.js";
@@ -249,6 +256,24 @@ async function handleRefund(body: unknown) {
   );
 
   if (reservation.kind === "replay") return reservation.response;
+  if (reservation.kind === "pending") {
+    const previous = reservation.response as { tx?: string } | null;
+    if (!previous?.tx) {
+      return { error_code: "REFUND_PENDING_CONFIRMATION", detail: "pending refund has no transaction hash" };
+    }
+    const status = await refundTransactionStatus(previous.tx as `0x${string}`);
+    if (status.status === "settled") {
+      const response = { tx: previous.tx, detail: status.detail };
+      await settleRefund(request.task_id, response);
+      return response;
+    }
+    if (status.status === "reverted") {
+      const response = { error_code: "REFUND_FAILED", detail: status.detail };
+      await releaseRefund(request.task_id, response);
+      return response;
+    }
+    return { error_code: "REFUND_PENDING_CONFIRMATION", tx: previous.tx, detail: status.detail };
+  }
   if (reservation.kind === "requires_human") {
     return { error_code: "REQUIRES_HUMAN", detail: reservation.detail };
   }
@@ -287,6 +312,15 @@ async function handleRefund(body: unknown) {
 
   const result = await executeRefund({ toAddress: request.to_address, amountUnits });
   if (!result.ok) {
+    if (result.pendingTx) {
+      const response = {
+        error_code: "REFUND_PENDING_CONFIRMATION",
+        tx: result.pendingTx,
+        detail: result.detail
+      };
+      await markRefundPending(request.task_id, response);
+      return response;
+    }
     const response = { error_code: "REFUND_FAILED", detail: result.detail };
     await releaseRefund(request.task_id, response);
     return response;
@@ -340,12 +374,17 @@ await ensureTables();
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
+      const readiness = await refundReadiness();
       send(res, 200, {
         ok: true,
         service: "firm-procurer",
         real_payments_enabled: realPaymentsEnabled(),
         real_refunds_enabled: realRefundsEnabled(),
-        wallet_key_present: Boolean(process.env.FIRM_WALLET_KEY)
+        wallet_key_present: Boolean(process.env.FIRM_WALLET_KEY),
+        refund_ready: readiness.ready,
+        refund_readiness_detail: readiness.detail,
+        refund_gas_balance_wei: readiness.balanceWei,
+        refund_gas_required_wei: readiness.requiredWei
       });
       return;
     }

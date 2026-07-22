@@ -42,5 +42,8 @@ export async function ensureGatewayTables() {
 
     CREATE INDEX IF NOT EXISTS firm_quotes_valid_until_idx
       ON firm_quotes(valid_until);
+
+    ALTER TABLE firm_jobs
+      ADD COLUMN IF NOT EXISTS attempts JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 }

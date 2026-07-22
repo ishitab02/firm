@@ -35,7 +35,14 @@ import { privateKeyToAccount } from "viem/accounts";
 import { publicClientFor, rpcUrlFor, TOKEN_ABI } from "./chain.js";
 import { walletKeyFromEnv } from "./local-signer.js";
 
-export type RefundResult = { ok: true; tx: string; detail: string } | { ok: false; detail: string };
+export type RefundResult =
+  | { ok: true; tx: string; detail: string }
+  | { ok: false; detail: string; pendingTx?: string };
+
+export type RefundTransactionStatus =
+  | { status: "settled"; detail: string }
+  | { status: "reverted"; detail: string }
+  | { status: "pending"; detail: string };
 
 export function realRefundsEnabled(): boolean {
   return process.env.REAL_REFUNDS_ENABLED === "true";
@@ -136,6 +143,62 @@ export function gasShortfall(input: {
 /** Gas a plain ERC-20 transfer is budgeted at, with headroom over the ~52k typical cost. */
 export const REFUND_GAS_LIMIT = 100_000n;
 
+export type RefundReadiness = {
+  ready: boolean;
+  detail: string;
+  balanceWei?: string;
+  requiredWei?: string;
+};
+
+/**
+ * Live operational readiness for the refund guarantee.
+ *
+ * Environment booleans only say the code path is armed. They do not prove the
+ * pinned signer has enough native gas, which is how production advertised
+ * refunds as available while every transfer deterministically failed.
+ */
+export async function refundReadiness(): Promise<RefundReadiness> {
+  if (!realRefundsEnabled()) return { ready: false, detail: "REAL_REFUNDS_ENABLED is not true" };
+  const chainIdRaw = process.env.REFUND_CHAIN;
+  if (!chainIdRaw || !process.env.REFUND_TOKEN_CONTRACT) {
+    return { ready: false, detail: "REFUND_CHAIN and REFUND_TOKEN_CONTRACT must be configured" };
+  }
+  const chainId = Number(chainIdRaw);
+  if (!Number.isInteger(chainId) || chainId <= 0) {
+    return { ready: false, detail: `REFUND_CHAIN must be a numeric chain id, got ${JSON.stringify(chainIdRaw)}` };
+  }
+
+  let account;
+  try {
+    account = privateKeyToAccount(walletKeyFromEnv());
+  } catch (error) {
+    return { ready: false, detail: error instanceof Error ? error.message : String(error) };
+  }
+  const walletFailure = refundWalletFailure(expectedRefundWallet(), account.address);
+  if (walletFailure) return { ready: false, detail: walletFailure };
+
+  try {
+    const publicClient = publicClientFor(chainId);
+    const [balanceWei, gasPriceWei] = await Promise.all([
+      publicClient.getBalance({ address: account.address }),
+      publicClient.getGasPrice()
+    ]);
+    const requiredWei = gasPriceWei * REFUND_GAS_LIMIT;
+    const shortfall = gasShortfall({ balanceWei, gasPriceWei, gasLimit: REFUND_GAS_LIMIT });
+    return {
+      ready: shortfall === null,
+      detail: shortfall ?? "refund signer, network, token, and native gas are ready",
+      balanceWei: balanceWei.toString(),
+      requiredWei: requiredWei.toString()
+    };
+  } catch (error) {
+    return {
+      ready: false,
+      detail: `could not read refund wallet gas balance: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
 export async function executeRefund(request: {
   toAddress: string;
   amountUnits: number;
@@ -216,6 +279,32 @@ export async function executeRefund(request: {
     const detail = error instanceof Error ? error.message : String(error);
     // The transaction may still confirm. Report the hash so a human can check
     // rather than silently retrying and sending the refund twice.
-    return { ok: false, detail: `refund ${hash} broadcast but not confirmed within the timeout: ${detail}` };
+    return {
+      ok: false,
+      pendingTx: hash,
+      detail: `refund ${hash} broadcast but not confirmed within the timeout: ${detail}`
+    };
+  }
+}
+
+/** Reconcile a previously broadcast refund without ever sending a second one. */
+export async function refundTransactionStatus(hash: Hex): Promise<RefundTransactionStatus> {
+  const chainId = Number(process.env.REFUND_CHAIN);
+  if (!Number.isInteger(chainId) || chainId <= 0) {
+    return { status: "pending", detail: "cannot reconcile: REFUND_CHAIN is not configured" };
+  }
+  try {
+    const receipt = await publicClientFor(chainId).getTransactionReceipt({ hash });
+    if (receipt.status === "success") {
+      return { status: "settled", detail: `refund settled in block ${receipt.blockNumber}` };
+    }
+    return { status: "reverted", detail: `refund ${hash} reverted on chain ${chainId}` };
+  } catch (error) {
+    return {
+      status: "pending",
+      detail: `refund ${hash} is not yet confirmed or the receipt RPC is unavailable: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    };
   }
 }

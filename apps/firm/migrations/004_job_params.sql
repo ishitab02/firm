@@ -1,7 +1,7 @@
 -- params: the vendor-specific request body for this job.
 --
--- Real marketplace vendors have real schemas — OKLink #2023 requires
--- chainIndex/address/height — and the payment is made BEFORE the vendor ever
+-- Real marketplace vendors have real schemas - OKLink #2023 requires
+-- chainIndex/address/height - and the payment is made BEFORE the vendor ever
 -- validates the body. A worker that sends only {goal, subtask} therefore pays
 -- for a 400. This is a money bug, not a correctness nit.
 --

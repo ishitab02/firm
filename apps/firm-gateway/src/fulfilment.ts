@@ -30,6 +30,8 @@ export type FulfilmentMode = {
   realPayments: boolean;
   realRefunds: boolean;
   walletKeyPresent: boolean;
+  refundReady: boolean;
+  refundReadinessDetail?: string;
 };
 
 /** Ask the procurer what it will actually do with a job. Null when unreachable. */
@@ -46,7 +48,10 @@ export async function readFulfilmentMode(
     return {
       realPayments: raw.real_payments_enabled === true,
       realRefunds: raw.real_refunds_enabled === true,
-      walletKeyPresent: raw.wallet_key_present === true
+      walletKeyPresent: raw.wallet_key_present === true,
+      refundReady: raw.refund_ready === true,
+      refundReadinessDetail:
+        typeof raw.refund_readiness_detail === "string" ? raw.refund_readiness_detail : undefined
     };
   } catch {
     return null;
@@ -95,6 +100,13 @@ export function fulfilmentFailure(input: {
       "the procurer has real vendor payments enabled but real refunds disabled. A customer could pay " +
       "for a failed job without receiving the advertised automatic refund. Enable and verify the refund " +
       "path before accepting paid work."
+    );
+  }
+
+  if (!input.mode.refundReady) {
+    return (
+      "the procurer refund path is armed but not operationally ready: " +
+      (input.mode.refundReadinessDetail ?? "live signer/gas readiness was not confirmed")
     );
   }
 

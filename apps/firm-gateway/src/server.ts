@@ -8,6 +8,7 @@ import {
   encodeRequirements,
   encodeSettlement,
   paymentHeaderFrom,
+  PaymentRequirements,
   sellerConfigFromEnv,
   settlePayment,
   SettleResult,
@@ -15,7 +16,7 @@ import {
 } from "./charging.js";
 import { ensureGatewayTables, pool } from "./db.js";
 import { mcpDispatch, TOOL_DEFINITIONS } from "./mcp.js";
-import { directExpressCall, expressJobTypes, normaliseExpressArgs } from "./express-args.js";
+import { directExpressCall, expressInputFailure, expressJobTypes, normaliseExpressArgs } from "./express-args.js";
 import { fulfilmentFailure, readFulfilmentMode } from "./fulfilment.js";
 import { quotePrice, estimatePlan, PricingMode } from "./pricing.js";
 import { usdt, units } from "./money.js";
@@ -57,11 +58,8 @@ function pricingMode(): PricingMode {
 /**
  * Firm Express config.
  *
- * OFF by default and honestly so: INTERFACES §1A locks the Express job types
- * only after live vendor-reliability testing (PLAN D4), which is gated on the
- * human-triggered payment spike. Until a human sets EXPRESS_ENABLED and confirms
- * the pool, express_run returns a structured "not enabled" rather than charging
- * for a service whose reliability is unproven.
+ * OFF by default so a new environment must explicitly opt into the paid API
+ * after verifying its database, worker, public candle access, and facilitator.
  */
 function expressEnabled(): boolean {
   return process.env.EXPRESS_ENABLED === "true";
@@ -118,6 +116,28 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type StoredQuote = { goal: string; quote: Record<string, any>; constraints?: Record<string, any> };
 
+type DeferredCharge = {
+  header: string;
+  requirements: PaymentRequirements;
+  payer: string;
+  facilitatorUrl: string;
+};
+
+const EXPRESS_HTTP_INPUT = {
+  type: "http",
+  method: "POST",
+  bodyType: "json",
+  body: {
+    type: "object",
+    required: ["symbol", "timeframe", "prompt"],
+    properties: {
+      symbol: { type: "string", description: "Crypto base symbol, e.g. ETH" },
+      timeframe: { type: "string", enum: ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"] },
+      prompt: { type: "string", description: "Requested market-analysis focus" }
+    }
+  }
+};
+
 /**
  * Read a live quote. Reads are allowed before payment — we cannot build a 402
  * challenge without knowing the quoted price. It is *writes* that are gated.
@@ -135,7 +155,13 @@ async function loadQuote(quoteId: string): Promise<StoredQuote | undefined> {
   return result.rows[0];
 }
 
-async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, buyerAddress?: string) {
+async function toolCall(
+  name: string,
+  args: any,
+  preloadedQuote?: StoredQuote,
+  buyerAddress?: string,
+  initialState: "paid" | "authorized" = "paid"
+) {
   if (name === "get_quote") {
     const request = quoteRequest.parse(args);
     const plan = estimatePlan(request.goal);
@@ -218,6 +244,15 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
     if (row.state === "failed_refunded" && row.provenance) {
       return { error: { code: "REFUNDED", refund: row.refund, provenance: row.provenance } };
     }
+    if (row.state === "failed_not_charged") {
+      return {
+        error: {
+          code: "FAILED_NOT_CHARGED",
+          detail: "fulfilment or settlement failed before buyer funds moved",
+          provenance: row.provenance
+        }
+      };
+    }
     if (row.state === "complete" && row.deliverable && row.provenance) {
       return { deliverable: row.deliverable, provenance: row.provenance };
     }
@@ -227,6 +262,8 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
   if (name === "express_run") {
     const normalised = normaliseExpressArgs(args);
     if (!normalised) return { error: { code: "INVALID_ARGS", detail: "job_type is required" } };
+    const inputFailure = expressInputFailure(normalised);
+    if (inputFailure) return { error: { code: "INVALID_ARGS", detail: inputFailure } };
     const capability = EXPRESS_CAPABILITY[normalised.job_type];
     if (!capability) return { error: { code: "UNKNOWN_JOB_TYPE", detail: normalised.job_type } };
     const parsed = { data: normalised };
@@ -255,10 +292,11 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
     await pool().query(
       `INSERT INTO firm_jobs
        (task_id, quote_id, state, goal, quote, params, progress, deliverable, provenance, refund)
-       VALUES ($1, $2, 'paid', $3, $4::jsonb, $5::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
       [
         taskId,
         jobQuote.quote_id,
+        initialState,
         `Firm Express: ${parsed.data.job_type}`,
         JSON.stringify(jobQuote),
         JSON.stringify(parsed.data.params ?? {})
@@ -274,22 +312,30 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
         [taskId]
       );
       const row: any = result.rows[0];
-      if (row?.state === "complete" && row.provenance) {
+      if ((row?.state === "ready_to_settle" || row?.state === "complete") && row.provenance) {
         const prov = row.provenance;
         const hire = Array.isArray(prov.hires) && prov.hires.length ? prov.hires[prov.hires.length - 1] : undefined;
         return {
           deliverable: row.deliverable,
           receipt: {
-            vendor: { agent_id: hire?.agent_id, name: hire?.name ?? null },
-            vendor_cost: hire?.cost,
-            vendor_tx: hire?.tx,
-            validation: hire?.validation,
+            vendor: hire ? { agent_id: hire.agent_id, name: hire.name ?? null } : null,
+            data_source: hire ? null : "OKX public candlesticks",
+            vendor_cost: hire?.cost ?? { amount: "0", decimals: 6, token: "USDT" },
+            vendor_tx: hire?.tx ?? null,
+            validation: hire?.validation ?? {
+              passed: true,
+              checks: ["request_contract", "asset_match", "timeframe_match", "prompt_match", "content_contract", "topic_match"]
+            },
             firm_margin: prov.economics?.margin_retained_or_absorbed
-          }
+          },
+          _settlement_task_id: taskId
         };
       }
       if (row?.state === "failed_refunded") {
         return { error: { code: "DELIVERY_FAILED_REFUNDED", refund_tx: row.refund?.tx ?? null } };
+      }
+      if (row?.state === "failed_not_charged") {
+        return { error: { code: "DELIVERY_FAILED_NOT_CHARGED", detail: "fulfilment failed before settlement" } };
       }
       await sleep(250);
     }
@@ -304,9 +350,8 @@ async function toolCall(name: string, args: any, preloadedQuote?: StoredQuote, b
 /**
  * What this call costs, or an error to return instead of charging.
  *
- * express_run deliberately has no price: its vendor pool is still a
- * placeholder, and charging for a placeholder would be taking money for
- * nothing. It returns its TODO error before the payment gate, never after.
+ * Projects prices come from stored quotes. Express uses its separately pinned
+ * fixed price in chargeGate and therefore never reaches this helper.
  */
 async function chargeFor(name: string, args: any) {
   if (name !== "execute") {
@@ -341,7 +386,7 @@ async function chargeGate(
   headers: Record<string, string | string[] | undefined>
 ): Promise<
   | { status: number; body: unknown; headers?: Record<string, string> }
-  | { settled: SettleResult | null; quote?: StoredQuote }
+  | { settled: SettleResult | null; quote?: StoredQuote; deferred?: DeferredCharge }
 > {
   if (!PAID_TOOLS.has(name)) return { settled: null };
 
@@ -349,7 +394,7 @@ async function chargeGate(
     const normalised = normaliseExpressArgs(args);
     if (!normalised) return { status: 200, body: { error: { code: "INVALID_ARGS", detail: "job_type is required" } } };
     const parsed = { data: normalised };
-    // Honest, free rejection until a human locks the pool (no charge, no write).
+    // Honest, free rejection until this environment enables the full path.
     if (!expressEnabled()) {
       return {
         status: 200,
@@ -357,7 +402,7 @@ async function chargeGate(
           error: {
             code: "EXPRESS_NOT_ENABLED",
             detail:
-              "Firm Express is not live yet; its vendor pool locks after reliability testing (PLAN D4). Use get_quote + execute (Firm Projects) meanwhile."
+              "Firm Express is disabled in this environment; enable it only after the worker, public market-data source, and x402 facilitator pass their readiness checks."
           }
         }
       };
@@ -377,14 +422,14 @@ async function chargeGate(
       console.warn(`[charging] BYPASS: serving express_run without payment (CHARGING_MODE is not "enforce")`);
       return { settled: null };
     }
-    const charged = await sellerCharge({
+    const charged = await sellerAuthorize({
       name,
       amount: expressPriceUnits(),
       decimals: 6,
       resource: `firm:express:${parsed.data.job_type}`,
       headers
     });
-    return "status" in charged ? charged : { settled: charged.verified };
+    return "status" in charged ? charged : { settled: null, deferred: charged.authorized };
   }
 
   const charge = await chargeFor(name, args);
@@ -393,6 +438,20 @@ async function chargeGate(
   if (chargingMode() === "bypass") {
     console.warn(`[charging] BYPASS: serving paid tool "${name}" without payment (CHARGING_MODE is not "enforce")`);
     return { settled: null, quote: charge.quote };
+  }
+
+  // Refund readiness is an operational fact, not a boot-time constant. Gas can
+  // be spent after startup, so re-check immediately before settling a Projects
+  // payment. A non-ready backend yields a free 503, never a charged job whose
+  // advertised guarantee is already impossible.
+  const procurerUrl = process.env.PROCURER_URL;
+  const liveMode = procurerUrl ? await readFulfilmentMode(procurerUrl) : null;
+  const readinessFailure = fulfilmentFailure({ charging: true, mode: liveMode });
+  if (readinessFailure) {
+    return {
+      status: 503,
+      body: { error: { code: "FULFILMENT_NOT_READY", detail: readinessFailure } }
+    };
   }
 
   const charged = await sellerCharge({
@@ -406,9 +465,9 @@ async function chargeGate(
 }
 
 /**
- * Build the 402 challenge for a fixed amount and verify the buyer's payment.
- * Shared by execute (quoted price) and express_run (fixed price). Fails closed:
- * an unconfigured seller returns 503, an unverified payment returns 402.
+ * Build the Projects 402 challenge, verify, and settle before vendor spend.
+ * Express uses sellerAuthorize below because its zero-cost fulfilment can be
+ * validated before settlement. Both paths fail closed.
  */
 async function sellerCharge(opts: {
   name: string;
@@ -466,6 +525,66 @@ async function sellerCharge(opts: {
   }
 
   return { verified: { ...settlement, payer } };
+}
+
+/**
+ * Verify an Express authorization without redeeming it.
+ *
+ * Express fulfilment is zero-cost public market data, so it can safely run
+ * before settlement. The gateway redeems only after the strict output contract
+ * passes and never exposes an unsettled result. That makes wrong-topic output a
+ * free failure for the buyer instead of a non-refundable paid call.
+ */
+async function sellerAuthorize(opts: {
+  name: string;
+  amount: string;
+  decimals: number;
+  resource: string;
+  headers: Record<string, string | string[] | undefined>;
+}): Promise<
+  { status: number; body: unknown; headers?: Record<string, string> }
+  | { authorized: DeferredCharge }
+> {
+  let seller;
+  try {
+    seller = sellerConfigFromEnv();
+  } catch (error) {
+    if (error instanceof ChargingNotConfigured) {
+      return { status: 503, body: { error: { code: "CHARGING_NOT_CONFIGURED", detail: error.message } } };
+    }
+    throw error;
+  }
+  const requirements = buildRequirements({
+    amount: opts.amount,
+    decimals: opts.decimals,
+    asset: seller.asset,
+    network: seller.network,
+    payTo: seller.payTo,
+    resource: opts.resource,
+    description: `The Firm — ${opts.name}`,
+    inputSchema: EXPRESS_HTTP_INPUT
+  });
+  const header = paymentHeaderFrom(opts.headers);
+  const requirePayment = (reason: string) => ({
+    status: 402,
+    headers: { "PAYMENT-REQUIRED": encodeRequirements(requirements) },
+    body: { error: { code: "PAYMENT_REQUIRED", detail: reason }, ...requirements }
+  });
+  const verification = await verifyPayment(header, requirements, { facilitatorUrl: seller.facilitatorUrl });
+  if (!verification.ok) return requirePayment(verification.reason);
+  if (!header) return requirePayment("verified request did not carry a payment header");
+  if (!verification.payer) {
+    return requirePayment("authorization has no payer address; refusing work whose settlement cannot be attributed");
+  }
+  if (!seller.facilitatorUrl) return requirePayment("X402_FACILITATOR_URL is not configured");
+  return {
+    authorized: {
+      header,
+      requirements,
+      payer: verification.payer,
+      facilitatorUrl: seller.facilitatorUrl
+    }
+  };
 }
 
 await ensureGatewayTables();
@@ -548,14 +667,70 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const result = await toolCall(method, args, gate.quote, gate.settled?.ok ? gate.settled.payer : undefined);
+    const result = await toolCall(
+      method,
+      args,
+      gate.quote,
+      gate.deferred?.payer ?? (gate.settled?.ok ? gate.settled.payer : undefined),
+      gate.deferred ? "authorized" : "paid"
+    );
+
+    // Express returns an internal task marker only after the worker has built
+    // and strictly validated the requested output. Settle at that point, make
+    // the result public only on settlement success, and remove the marker from
+    // the buyer-visible body in every case.
+    const settlementTaskId =
+      result && typeof result === "object" && typeof result._settlement_task_id === "string"
+        ? result._settlement_task_id
+        : undefined;
+    let responseSettlement = gate.settled;
+    if (settlementTaskId && gate.deferred) {
+      const settlement = await settlePayment(gate.deferred.header, gate.deferred.requirements, {
+        facilitatorUrl: gate.deferred.facilitatorUrl
+      });
+      if (!settlement.ok) {
+        await pool().query(
+          `UPDATE firm_jobs
+           SET state = 'failed_not_charged', deliverable = NULL,
+               provenance = jsonb_set(COALESCE(provenance, '{}'::jsonb), '{guarantee_status}', '"not_charged"'::jsonb),
+               updated_at = now()
+           WHERE task_id = $1 AND state = 'ready_to_settle'`,
+          [settlementTaskId]
+        );
+        res.writeHead(402, {
+          "content-type": "application/json",
+          "PAYMENT-REQUIRED": encodeRequirements(gate.deferred.requirements)
+        });
+        res.end(
+          JSON.stringify({
+            error: {
+              code: "PAYMENT_NOT_SETTLED",
+              detail: `output validated but authorization did not settle; buyer was not charged: ${settlement.reason}`
+            },
+            ...gate.deferred.requirements
+          })
+        );
+        return;
+      }
+      responseSettlement = { ...settlement, payer: settlement.payer ?? gate.deferred.payer };
+      await pool().query(
+        "UPDATE firm_jobs SET state = 'complete', updated_at = now() WHERE task_id = $1 AND state = 'ready_to_settle'",
+        [settlementTaskId]
+      );
+    } else if (settlementTaskId && chargingMode() === "bypass") {
+      await pool().query(
+        "UPDATE firm_jobs SET state = 'complete', updated_at = now() WHERE task_id = $1 AND state = 'ready_to_settle'",
+        [settlementTaskId]
+      );
+    }
+    if (settlementTaskId && result && typeof result === "object") delete result._settlement_task_id;
     const payload: Record<string, unknown> =
       PAID_TOOLS.has(method) && chargingMode() === "bypass" && result && typeof result === "object"
         ? { ...result, charging: "BYPASSED" }
         : (result as Record<string, unknown>);
 
     const responseHeaders: Record<string, string> = { "content-type": "application/json" };
-    if (gate.settled?.ok) responseHeaders["PAYMENT-RESPONSE"] = encodeSettlement(gate.settled);
+    if (responseSettlement?.ok) responseHeaders["PAYMENT-RESPONSE"] = encodeSettlement(responseSettlement);
     res.writeHead(200, responseHeaders);
     res.end(JSON.stringify(body.id ? { jsonrpc: "2.0", id: body.id, result: payload } : payload));
   } catch (error) {

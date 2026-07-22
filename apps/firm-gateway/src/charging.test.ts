@@ -65,9 +65,15 @@ describe("seller configuration", () => {
     process.env.FIRM_PAYTO_ADDRESS = "0xfirm";
     expect(() => sellerConfigFromEnv()).toThrow(ChargingNotConfigured);
 
-    process.env.FIRM_CHARGE_ASSET = "0xAAAA";
+    process.env.FIRM_CHARGE_ASSET = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
     process.env.FIRM_CHARGE_NETWORK = "eip155:196";
-    expect(sellerConfigFromEnv()).toMatchObject({ payTo: "0xfirm", asset: "0xAAAA" });
+    expect(sellerConfigFromEnv()).toMatchObject({
+      payTo: "0xfirm",
+      asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736"
+    });
+
+    process.env.FIRM_CHARGE_ASSET = "0xwrong";
+    expect(() => sellerConfigFromEnv()).toThrow(/X Layer USDT only/);
   });
 });
 
@@ -111,6 +117,17 @@ describe("buildRequirements", () => {
     const requirements = buildRequirements(spec);
     const decoded = JSON.parse(Buffer.from(encodeRequirements(requirements), "base64").toString("utf8"));
     expect(decoded).toEqual(requirements);
+  });
+
+  it("publishes the paid POST body contract in the challenge", () => {
+    const inputSchema = {
+      type: "http",
+      method: "POST",
+      bodyType: "json",
+      body: { type: "object", required: ["symbol", "timeframe", "prompt"] }
+    };
+    const requirements = buildRequirements({ ...spec, inputSchema });
+    expect((requirements.accepts[0].outputSchema as any).input).toEqual(inputSchema);
   });
 });
 

@@ -59,6 +59,10 @@ class Quote(BaseModel):
     # refund pays back the real buyer. None on bypassed runs (no real payer),
     # where the refund falls back to the configured default address.
     buyer_address: str | None = None
+    # Express verifies an x402 authorization first, fulfils from a free public
+    # data source, and settles only after validation. The worker needs this bit
+    # to avoid treating an unsettled authorization as a refundable payment.
+    express: bool = False
 
 
 class QuoteError(BaseModel):
@@ -67,6 +71,7 @@ class QuoteError(BaseModel):
 
 class JobState(StrEnum):
     QUOTED = "quoted"
+    AUTHORIZED = "authorized"
     PAID = "paid"
     PLANNING = "planning"
     SOURCING = "sourcing"
@@ -75,10 +80,12 @@ class JobState(StrEnum):
     VALIDATING = "validating"
     ASSEMBLING = "assembling"
     BOOKING = "booking"
+    READY_TO_SETTLE = "ready_to_settle"
     COMPLETE = "complete"
     REFUNDING = "refunding"
     REFUNDED = "refunded"
     FAILED_REFUNDED = "failed_refunded"
+    FAILED_NOT_CHARGED = "failed_not_charged"
 
 
 class ProgressItem(BaseModel):
@@ -162,6 +169,20 @@ class HireReceipt(BaseModel):
     validation: dict[str, Any]
 
 
+class ProcurementAttempt(BaseModel):
+    """Durable record of every vendor payment and its validation outcome."""
+
+    agent_id: str
+    subtask: str
+    endpoint: str
+    result: dict[str, Any]
+    cost: Money
+    tx: str
+    validation: dict[str, Any]
+    outcome: Literal["delivered", "fired"]
+    reason: str | None = None
+
+
 class Economics(BaseModel):
     user_price: Money
     actual_vendor_costs: Money
@@ -183,9 +204,10 @@ class ProvenanceReceipt(BaseModel):
     vendors_rejected: list[VendorRejection]
     vendors_fired: list[VendorFiring]
     hires: list[HireReceipt]
+    data_sources: list[str] = Field(default_factory=list)
     economics: Economics
     books: BooksReceipt
-    guarantee_status: Literal["delivered", "refunded"]
+    guarantee_status: Literal["delivered", "refunded", "not_charged"]
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -230,6 +252,7 @@ class FirmTask(BaseModel):
     deliverable: dict[str, Any] | None = None
     provenance: ProvenanceReceipt | None = None
     refund: dict[str, Any] | None = None
+    attempts: list[ProcurementAttempt] = Field(default_factory=list)
 
 
 class StatusResponse(BaseModel):

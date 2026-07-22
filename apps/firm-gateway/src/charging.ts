@@ -45,6 +45,8 @@ export type ChargeSpec = {
   payTo: string;
   resource: string;
   description: string;
+  /** Bazaar-style replay contract included in the 402 challenge. */
+  inputSchema?: Record<string, unknown>;
 };
 
 /**
@@ -141,6 +143,9 @@ export function decodePaymentHeader(headerValue: string): Record<string, unknown
 
 export class ChargingNotConfigured extends Error {}
 
+export const X_LAYER_USDT = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+export const X_LAYER_NETWORK = "eip155:196";
+
 /**
  * Where the Firm gets paid. Every field is required and none is guessed: an
  * unset value is a hard failure, not a default, because a wrong payTo sends the
@@ -153,6 +158,11 @@ export function sellerConfigFromEnv() {
   if (!payTo || !asset || !network) {
     throw new ChargingNotConfigured(
       "FIRM_PAYTO_ADDRESS, FIRM_CHARGE_ASSET and FIRM_CHARGE_NETWORK must all be set before the gateway can charge"
+    );
+  }
+  if (asset.toLowerCase() !== X_LAYER_USDT || network !== X_LAYER_NETWORK) {
+    throw new ChargingNotConfigured(
+      `Firm Express is listed for X Layer USDT only; expected ${X_LAYER_NETWORK} asset ${X_LAYER_USDT}`
     );
   }
   return { payTo, asset, network, facilitatorUrl: process.env.X402_FACILITATOR_URL };
@@ -174,7 +184,10 @@ export function buildRequirements(spec: ChargeSpec): PaymentRequirements {
         description: spec.description,
         mimeType: "application/json",
         maxTimeoutSeconds: Number(process.env.CHARGE_TIMEOUT_SECONDS ?? 120),
-        outputSchema: { input: { type: "object" }, output: { type: "object" } },
+        outputSchema: {
+          input: spec.inputSchema ?? { type: "object" },
+          output: { type: "object" }
+        },
         extra: { decimals: spec.decimals }
       }
     ]

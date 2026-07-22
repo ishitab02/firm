@@ -1,3 +1,4 @@
+import json
 from typing import Any, TypedDict
 
 from .models import (
@@ -8,6 +9,7 @@ from .models import (
     JobState,
     Money,
     PayAndCallRequest,
+    ProcurementAttempt,
     ProvenanceReceipt,
     ValidationResult,
     VendorFiring,
@@ -15,7 +17,17 @@ from .models import (
     VendorRejection,
 )
 from .config import get_settings
-from .procurer import Procurer, SimulatedProcurer
+from .market_snapshot import (
+    VENDOR_AGENT_ID,
+    VENDOR_ENDPOINT,
+    VENDOR_TOOL,
+    MarketSnapshotError,
+    build_market_snapshot,
+    candles_from_price_series,
+    normalise_market_request,
+    vendor_request,
+)
+from .procurer import Procurer, RefundFailure, SimulatedProcurer
 from .sourcing import select_service, PerformanceStore, rank_candidates
 from .storage import CheckpointStore
 from .validation import validate
@@ -106,6 +118,112 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
     store.transition(task, JobState.PROCURING, "starting vendor procurement")
     subtask_results: list[dict[str, Any]] = []
 
+    # Express BUYS its market data from a marketplace agent and derives the
+    # promised fields from it. The endpoints tagged market_snapshot are mostly
+    # ETF-flow services that cannot serve symbol + timeframe + price action +
+    # trend + support/resistance, which is how a reviewer was billed twice for
+    # Bitcoin ETF holdings after asking about ETH.
+    #
+    # The alternative was to fetch OKX's own free public candle API and sell it
+    # at 0.1 USDT. That delivers the right answer and quietly removes the only
+    # thing that makes this a contractor rather than a proxy -- while reselling
+    # the host's free data back to them. So we hire instead: OKLink #2023 sells
+    # a real price series for 15 base units and documents its arguments, and the
+    # analysis on top is the part the buyer is actually paying for.
+    if task.quote.express:
+        if len(task.quote.plan_summary) != 1 or task.quote.plan_summary[0].capability != "market_snapshot":
+            state["error"] = "Express only supports the market_snapshot contract"
+            return state
+        subtask = task.quote.plan_summary[0]
+        try:
+            symbol, timeframe, _prompt = normalise_market_request(dict(task.params))
+            args = vendor_request(symbol, timeframe)
+        except MarketSnapshotError as error:
+            # Refused before spending: an unmapped symbol is our gap, not a
+            # vendor failure, and carries no performance penalty.
+            state["error"] = str(error)
+            store.transition(task, JobState.PROCURING, f"not purchasable: {error}", subtask.subtask)
+            return state
+
+        response = await procurer.pay_and_call(
+            PayAndCallRequest(
+                vendor_endpoint=VENDOR_ENDPOINT,
+                tool=VENDOR_TOOL,
+                args=args,
+                max_amount=Money.usdt(EXPRESS_VENDOR_CEILING_UNITS),
+                task_id=task.task_id,
+                subtask_id=subtask.subtask,
+            )
+        )
+        if not response.ok or response.receipt is None:
+            code = response.error_code or "VENDOR_ERROR"
+            state["error"] = f"{VENDOR_AGENT_ID} could not supply price data ({code})"
+            if code in _NOT_VENDOR_FAULT:
+                store.transition(
+                    task,
+                    JobState.PROCURING,
+                    f"did not hire {VENDOR_AGENT_ID}: {code}; the Firm's own decision, not a vendor failure",
+                    subtask.subtask,
+                )
+            else:
+                state["performance"].record_timeout(VENDOR_AGENT_ID)
+                store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+            return state
+
+        try:
+            rows = _price_rows(response.result)
+            candles = candles_from_price_series(rows, timeframe)
+            snapshot = build_market_snapshot(
+                dict(task.params),
+                candles,
+                source=f"OKLink Onchain Data Explorer #{VENDOR_AGENT_ID} (purchased)",
+                source_url=VENDOR_ENDPOINT,
+            )
+        except MarketSnapshotError as error:
+            # The vendor was paid and returned something we could not build a
+            # snapshot from. That IS a vendor shortfall, so it is scored.
+            state["performance"].record_validation_failure(VENDOR_AGENT_ID)
+            state["error"] = f"purchased series unusable: {error}"
+            store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+            return state
+
+        validation = validate(snapshot, {"acceptance": "market_snapshot", "request": dict(task.params)})
+        if not validation.passed:
+            state["performance"].record_validation_failure(VENDOR_AGENT_ID)
+            state["error"] = _validation_reason(validation)
+            store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+            return state
+
+        state["performance"].record_success(VENDOR_AGENT_ID)
+        # Recorded as a hire so the receipt shows what was actually bought and
+        # from whom. A snapshot built on purchased data must never report zero
+        # vendor cost.
+        state.setdefault("hires", []).append(
+            HireReceipt(
+                agent_id=VENDOR_AGENT_ID,
+                subtask=subtask.subtask,
+                cost=response.receipt.amount,
+                tx=response.receipt.tx,
+                validation={"passed": True, "checks": validation.checks_run},
+            )
+        )
+        task.deliverable = snapshot
+        state["subtask_deliverables"] = [
+            {
+                "subtask": subtask.subtask,
+                "capability": subtask.capability,
+                "source": f"OKLink #{VENDOR_AGENT_ID} price series, analysed by The Firm",
+                "result": snapshot,
+            }
+        ]
+        store.transition(
+            task,
+            JobState.PROCURING,
+            f"bought a {timeframe} price series from {VENDOR_AGENT_ID} and derived the snapshot",
+            subtask.subtask,
+        )
+        return state
+
     # Every subtask must be delivered. If any one exhausts its candidates the
     # whole job fails and refunds — the Projects guarantee is all-or-nothing.
     for subtask in task.quote.plan_summary:
@@ -171,6 +289,29 @@ async def _procure_subtask(
         if service is None:
             continue
 
+        endpoint = service.endpoint or vendor.endpoint
+        previous = next(
+            (
+                attempt
+                for attempt in task.attempts
+                if attempt.subtask == subtask.subtask and attempt.endpoint == endpoint
+            ),
+            None,
+        )
+        if previous is not None:
+            # The persisted ledger is the source of truth after a worker crash.
+            # A delivered result is reusable; a fired result must not be bought
+            # again. This also keeps the procurer's settled-call ledger and the
+            # public provenance receipt in exact agreement.
+            if previous.outcome == "delivered":
+                return {
+                    "subtask": subtask.subtask,
+                    "capability": subtask.capability,
+                    "agent_id": vendor.agent_id,
+                    "result": previous.result,
+                }
+            continue
+
         # Everything above this line is free. Below it we spend, so check what
         # the vendor told us it needs BEFORE paying for a call that cannot work.
         args = _vendor_args(task, subtask)
@@ -204,7 +345,7 @@ async def _procure_subtask(
                 # The SELECTED service's endpoint, not the vendor-wide one.
                 # Falling back here is what sent every CoinAnk request to its
                 # Bitcoin ETF URL no matter which service was chosen.
-                vendor_endpoint=service.endpoint or vendor.endpoint,
+                vendor_endpoint=endpoint,
                 tool=service.tool,
                 args=args,
                 max_amount=service.price,
@@ -249,13 +390,29 @@ async def _procure_subtask(
             response.result,
             {"acceptance": subtask.subtask, "request": dict(task.params) if task.params else None},
         )
+        validation_receipt = {"passed": validation.passed, "checks": validation.checks_run}
+        reason = _validation_reason(validation) if not validation.passed else None
+        task.attempts.append(
+            ProcurementAttempt(
+                agent_id=vendor.agent_id,
+                subtask=subtask.subtask,
+                endpoint=endpoint,
+                result=response.result,
+                cost=response.receipt.amount,
+                tx=response.receipt.tx,
+                validation=validation_receipt,
+                outcome="delivered" if validation.passed else "fired",
+                reason=reason,
+            )
+        )
+        store.save_task(task)
         state.setdefault("hires", []).append(
             HireReceipt(
                 agent_id=vendor.agent_id,
                 subtask=subtask.subtask,
                 cost=response.receipt.amount,
                 tx=response.receipt.tx,
-                validation={"passed": validation.passed, "checks": validation.checks_run},
+                validation=validation_receipt,
             )
         )
 
@@ -265,7 +422,7 @@ async def _procure_subtask(
                 VendorFiring(
                     agent_id=vendor.agent_id,
                     subtask=subtask.subtask,
-                    reason=_validation_reason(validation),
+                    reason=reason or "validation failed",
                     cost_absorbed=response.receipt.amount,
                 )
             )
@@ -318,17 +475,39 @@ def assembling_node(state: FirmGraphState) -> FirmGraphState:
 
 def booking_node(state: FirmGraphState) -> FirmGraphState:
     task = state["task"]
-    guarantee_status = "delivered" if task.deliverable else "refunded"
+    if task.deliverable:
+        guarantee_status = "delivered"
+    elif task.quote.express:
+        guarantee_status = "not_charged"
+    else:
+        guarantee_status = "refunded"
     state["store"].transition(
         task,
         JobState.BOOKING if task.deliverable else JobState.REFUNDING,
         "generated disclosed books receipt",
     )
     task.provenance = build_provenance(task, state, guarantee_status)
+    terminal = (
+        JobState.READY_TO_SETTLE
+        if task.deliverable and task.quote.express
+        else JobState.COMPLETE
+        if task.deliverable
+        else JobState.FAILED_NOT_CHARGED
+        if task.quote.express
+        else JobState.FAILED_REFUNDED
+    )
     state["store"].transition(
         task,
-        JobState.COMPLETE if task.deliverable else JobState.FAILED_REFUNDED,
-        "run complete" if task.deliverable else "refund issued",
+        terminal,
+        (
+            "validated result ready for inbound settlement"
+            if terminal == JobState.READY_TO_SETTLE
+            else "run complete"
+            if terminal == JobState.COMPLETE
+            else "fulfilment failed before charge"
+            if terminal == JobState.FAILED_NOT_CHARGED
+            else "refund issued"
+        ),
     )
     return state
 
@@ -337,16 +516,38 @@ async def refunding_node(state: FirmGraphState) -> FirmGraphState:
     task = state["task"]
     if task.deliverable:
         return state
+    # Express has only a verified authorization at this point. It has not been
+    # settled, so there is nothing to refund and claiming otherwise would
+    # fabricate a transaction. The booking node records the terminal
+    # failed_not_charged outcome.
+    if task.quote.express:
+        state["store"].transition(task, JobState.FAILED_NOT_CHARGED, "fulfilment failed; buyer was not charged")
+        return state
     procurer = state.get("procurer") or SimulatedProcurer()
     settings = get_settings()
     # Refund the actual buyer captured at execute. Only fall back to the
     # configured default when there is no verified payer (a bypassed run).
     refund_to = task.quote.buyer_address or settings.default_refund_address
-    refund = await procurer.refund(
-        task_id=task.task_id,
-        to_address=refund_to,
-        amount=task.quote.price.model_dump(mode="json"),
-    )
+    try:
+        refund = await procurer.refund(
+            task_id=task.task_id,
+            to_address=refund_to,
+            amount=task.quote.price.model_dump(mode="json"),
+        )
+    except Exception as error:
+        # Keep the job in REFUNDING and persist the exact operational failure.
+        # A later worker retry resumes here; it must never restart planning and
+        # pay another vendor while the original customer refund is outstanding.
+        task.refund = {
+            "amount": task.quote.price.model_dump(mode="json"),
+            "to_address": refund_to,
+            "error": str(error),
+        }
+        if isinstance(error, RefundFailure) and error.tx:
+            task.refund["pending_tx"] = error.tx
+        state["error"] = str(error)
+        state["store"].transition(task, JobState.REFUNDING, f"refund not settled; retry required: {error}")
+        return state
     task.refund = {
         "amount": task.quote.price.model_dump(mode="json"),
         "tx": refund["tx"],
@@ -401,6 +602,7 @@ def build_provenance(
         vendors_rejected=state.get("rejected", []),
         vendors_fired=state.get("fired", []),
         hires=state.get("hires", []),
+        data_sources=["OKX public candlesticks"] if task.quote.express and task.deliverable else [],
         economics=Economics(
             user_price=task.quote.price,
             actual_vendor_costs=vendor_costs,
@@ -432,6 +634,10 @@ def _route_after_validating(state: FirmGraphState) -> str:
     return "assembling" if state["task"].deliverable else "refunding"
 
 
+def _route_after_refunding(state: FirmGraphState) -> str:
+    return "booking" if state["task"].state in (JobState.REFUNDED, JobState.FAILED_NOT_CHARGED) else "end"
+
+
 def build_graph() -> Any:
     try:
         from langgraph.graph import END, StateGraph
@@ -458,7 +664,11 @@ def build_graph() -> Any:
         {"assembling": "assembling", "refunding": "refunding"},
     )
     graph.add_edge("assembling", "booking")
-    graph.add_edge("refunding", "booking")
+    graph.add_conditional_edges(
+        "refunding",
+        _route_after_refunding,
+        {"booking": "booking", "end": END},
+    )
     graph.add_edge("booking", END)
     return graph.compile()
 
@@ -505,6 +715,36 @@ def _vendor_args(task: FirmTask, subtask: Any) -> dict[str, Any]:
     if task.params:
         return dict(task.params)
     return {"goal": task.goal, "subtask": subtask.subtask}
+
+
+#: Ceiling for the Express price-series purchase. The vendor lists 15 base units
+#: (0.000015 USDT); this leaves headroom for a small price move while staying
+#: three orders of magnitude below the 0.1 USDT the buyer paid. A vendor asking
+#: for more than this is refused before signing rather than silently absorbed.
+EXPRESS_VENDOR_CEILING_UNITS = 1_000
+
+
+def _price_rows(result: Any) -> list[dict[str, Any]]:
+    """Pull the price series out of the vendor's envelope.
+
+    OKLink wraps its payload as {"code": "0", "data": "<json string>"} -- the
+    data field is a STRING containing JSON, not an object. Parsing it defensively
+    here keeps that quirk in one place, and an unparseable body raises rather
+    than yielding an empty series that would look like a thin market.
+    """
+    if not isinstance(result, dict):
+        raise MarketSnapshotError("vendor returned no result object")
+    data = result.get("data")
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError as error:
+            raise MarketSnapshotError(f"vendor data was not JSON: {error}") from error
+    if not isinstance(data, list):
+        raise MarketSnapshotError("vendor returned no price array")
+    if not data:
+        raise MarketSnapshotError("vendor returned an empty price series")
+    return data
 
 
 def _validation_reason(result: ValidationResult) -> str:

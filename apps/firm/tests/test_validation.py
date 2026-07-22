@@ -241,7 +241,10 @@ def test_unknown_symbol_is_not_judged():
 def test_end_to_end_the_reviewers_job_now_fails_validation():
     """The exact shape that was settled and never refunded."""
     deliverable = {"code": "1", "data": [{"ticker": "IBIT", "etfName": "iShares Bitcoin Trust", "price": 37.67}]}
-    spec = {"acceptance": "market_snapshot", "request": {"symbol": "ETH", "timeframe": "4h"}}
+    spec = {
+        "acceptance": "market_snapshot",
+        "request": {"symbol": "ETH", "timeframe": "4h", "prompt": "price action, trend, support and resistance"},
+    }
     result = validate(deliverable, spec)
     assert result.passed is False
     assert any(f.check == "relevance" for f in result.failures)
@@ -249,5 +252,44 @@ def test_end_to_end_the_reviewers_job_now_fails_validation():
 
 def test_end_to_end_matching_asset_still_passes():
     deliverable = {"code": "1", "data": [{"ticker": "IBIT", "etfName": "iShares Bitcoin Trust", "price": 37.67}]}
-    spec = {"acceptance": "market_snapshot", "request": {"symbol": "BTC", "timeframe": "1h"}}
-    assert validate(deliverable, spec).passed is True
+    spec = {
+        "acceptance": "market_snapshot",
+        "request": {"symbol": "BTC", "timeframe": "1h", "prompt": "price action, trend, support and resistance"},
+    }
+    result = validate(deliverable, spec)
+    assert result.passed is False
+    assert any(f.check in {"content_contract", "topic_match"} for f in result.failures)
+
+
+def test_same_asset_etf_payload_is_not_a_spot_market_snapshot():
+    deliverable = {
+        "code": "1",
+        "data": [{"ticker": "ETHA", "etfName": "iShares Ethereum Trust ETF", "netInflow": 12_000_000}],
+    }
+    spec = {
+        "acceptance": "market_snapshot",
+        "request": {"symbol": "ETH", "timeframe": "4h", "prompt": "price action, trend, support and resistance"},
+    }
+    result = validate(deliverable, spec)
+    assert result.passed is False
+    assert any(f.check == "topic_match" for f in result.failures)
+
+
+def test_wrong_timeframe_fails_even_when_every_content_field_exists():
+    deliverable = {
+        "symbol": "ETH",
+        "timeframe": "1h",
+        "prompt": "price action, trend, support and resistance",
+        "price": 3500.0,
+        "price_action": "ETH-USDT rose over the sampled candles.",
+        "trend": "bullish",
+        "support": 3400.0,
+        "resistance": 3600.0,
+    }
+    spec = {
+        "acceptance": "market_snapshot",
+        "request": {"symbol": "ETH", "timeframe": "4h", "prompt": "price action, trend, support and resistance"},
+    }
+    result = validate(deliverable, spec)
+    assert result.passed is False
+    assert any(f.check == "timeframe_match" for f in result.failures)

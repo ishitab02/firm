@@ -1,3 +1,4 @@
+import json
 import asyncio
 from datetime import datetime, timezone
 
@@ -7,8 +8,10 @@ from firm.models import (
     FirmTask,
     JobState,
     Money,
+    PayAndCallReceipt,
     PayAndCallRequest,
     PayAndCallResponse,
+    ProcurementAttempt,
     Quote,
     VendorIndexEntry,
     VendorService,
@@ -16,6 +19,7 @@ from firm.models import (
 from firm.sourcing import PerformanceStore
 from firm.storage import InMemoryCheckpointStore
 from firm.worker import run_task
+from firm.procurer import RefundFailure
 
 
 class AlwaysGoodProcurer:
@@ -73,6 +77,53 @@ def test_worker_refunds_when_candidates_exhausted() -> None:
     assert completed.provenance.guarantee_status == "refunded"
 
 
+class RefundFailsBeforeBroadcast:
+    def __init__(self) -> None:
+        self.pay_calls = 0
+
+    async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
+        self.pay_calls += 1
+        raise AssertionError("a refund resume must not procure again")
+
+    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, str]:
+        raise RefundFailure("REFUND_FAILED", "native gas shortfall")
+
+
+def test_failed_refund_stays_retryable_and_never_restarts_procurement() -> None:
+    task = FirmTask(task_id="t_refund_retry", goal="ship firm", quote=quote(), state=JobState.REFUNDING)
+    task.attempts = [
+        ProcurementAttempt(
+            agent_id="vendor-paid-once",
+            subtask="launch brief",
+            endpoint="https://vendor.example/launch",
+            result={"error": "wrong output but substantive"},
+            cost=Money.usdt(100_000),
+            tx="0xpaid-once",
+            validation={"passed": False, "checks": ["content_contract"]},
+            outcome="fired",
+            reason="validation failed: content_contract",
+        )
+    ]
+    failing = RefundFailsBeforeBroadcast()
+    store = InMemoryCheckpointStore()
+
+    pending = asyncio.run(
+        run_task(task, demo_vendors(prefix="test"), store, PerformanceStore({}), failing)
+    )
+    assert pending.state == JobState.REFUNDING
+    assert pending.refund is not None and "gas shortfall" in pending.refund["error"]
+    assert pending.provenance is None
+    assert failing.pay_calls == 0
+
+    completed = asyncio.run(
+        run_task(pending, demo_vendors(prefix="test"), store, PerformanceStore({}), AlwaysGoodProcurer())
+    )
+    assert completed.state == JobState.FAILED_REFUNDED
+    assert completed.provenance is not None
+    assert completed.provenance.economics.actual_vendor_costs.amount == "100000"
+    assert [hire.tx for hire in completed.provenance.hires] == ["0xpaid-once"]
+
+
 async def run_refund_task() -> FirmTask:
     task = FirmTask(task_id="t_refund_test", goal="ship firm", quote=quote(), state=JobState.PAID)
     store = InMemoryCheckpointStore()
@@ -119,6 +170,132 @@ def test_multi_subtask_job_hires_a_specialist_per_subtask() -> None:
     # One hire per subtask, and provenance economics summed both vendor costs.
     assert completed.provenance is not None
     assert len(completed.provenance.hires) == 2
+
+
+def test_express_buys_its_price_series_and_records_the_hire() -> None:
+    """Express must HIRE for its data, not fetch it free and keep the whole fee.
+
+    The rejected alternative fetched OKX's own public candle API and sold the
+    result at 0.1 USDT. It delivered the right answer while removing the only
+    thing that makes this a contractor -- and resold the host's free data back to
+    them. So this asserts the receipt shows a real vendor and a real cost; a
+    snapshot built on purchased data reporting zero vendor cost would be a lie
+    on the one field the entry asks judges to trust.
+    """
+    params = {
+        "symbol": "ETH",
+        "timeframe": "4h",
+        "prompt": "price action, trend, support and resistance",
+    }
+
+    # An OKLink-shaped envelope: `data` is a JSON *string*, and the series is
+    # hourly points, which the worker resamples into 4h candles itself.
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    hour = 3_600_000
+    rows = [
+        {"price": str(1900 + (i % 7) * 3), "time": str(now_ms - i * hour)}
+        for i in range(120)
+    ]
+
+    class PriceSeriesVendor:
+        def __init__(self) -> None:
+            self.calls: list[Any] = []
+
+        async def pay_and_call(self, request):
+            self.calls.append(request)
+            return PayAndCallResponse(
+                ok=True,
+                result={"code": "0", "msg": "", "data": json.dumps(rows)},
+                receipt=PayAndCallReceipt(
+                    amount=Money.usdt(15), tx="0xvendor", payment_response="e30="
+                ),
+            )
+
+        async def refund(self, task_id, to_address, amount):
+            raise AssertionError("a delivered job must not refund")
+
+    vendor = PriceSeriesVendor()
+    express_quote = Quote(
+        quote_id="qx_express",
+        price=Money.usdt(100_000),
+        plan_summary=[{"subtask": "market_snapshot", "capability": "market_snapshot"}],
+        valid_until=datetime.now(timezone.utc),
+        pricing_mode="QUOTED_AMOUNT",
+        express=True,
+        buyer_address="0xbuyer",
+    )
+    task = FirmTask(
+        task_id="t_express",
+        goal="Firm Express: market_snapshot",
+        quote=express_quote,
+        params=params,
+        state=JobState.AUTHORIZED,
+    )
+
+    completed = asyncio.run(
+        run_task(task, [], InMemoryCheckpointStore(), PerformanceStore({}), vendor)
+    )
+
+    # It bought the series, with the verified WETH address and an hourly
+    # granularity -- never a guessed contract, never the empty 4H series.
+    assert len(vendor.calls) == 1
+    bought = vendor.calls[0]
+    assert bought.tool == "get_token_price_history"
+    assert bought.args["tokenAddress"] == "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+    assert bought.args["granularity"] == "1H"
+
+    assert completed.state == JobState.READY_TO_SETTLE
+    assert completed.deliverable is not None
+    snapshot = completed.deliverable["result"]
+    assert snapshot["symbol"] == "ETH"
+    assert snapshot["timeframe"] == "4h"
+    assert snapshot["trend"]["direction"] in {"bullish", "bearish", "sideways"}
+    assert snapshot["support"]["level"] <= snapshot["resistance"]["level"]
+
+    # The receipt names the agent and the money that reached it.
+    assert completed.provenance is not None
+    assert [hire.agent_id for hire in completed.provenance.hires] == ["2023"]
+    assert completed.provenance.hires[0].cost.units() == 15
+    assert completed.provenance.economics.actual_vendor_costs.units() == 15
+
+
+def test_express_refuses_an_unmapped_symbol_before_spending() -> None:
+    """A symbol with no verified token address is refused, not guessed at.
+
+    Guessing a contract address fails silently: a wrong-but-valid address returns
+    somebody else's price, which is the same shape of error as answering an ETH
+    question with Bitcoin data.
+    """
+
+    class NeverCalled:
+        async def pay_and_call(self, request):
+            raise AssertionError("must not spend on an unmapped symbol")
+
+        async def refund(self, task_id, to_address, amount):
+            return {"tx": "0xrefund"}
+
+    quote = Quote(
+        quote_id="qx_unmapped",
+        price=Money.usdt(100_000),
+        plan_summary=[{"subtask": "market_snapshot", "capability": "market_snapshot"}],
+        valid_until=datetime.now(timezone.utc),
+        pricing_mode="QUOTED_AMOUNT",
+        express=True,
+        buyer_address="0xbuyer",
+    )
+    task = FirmTask(
+        task_id="t_unmapped",
+        goal="Firm Express: market_snapshot",
+        quote=quote,
+        params={"symbol": "DOGE", "timeframe": "1h", "prompt": "price action and trend"},
+        state=JobState.AUTHORIZED,
+    )
+
+    completed = asyncio.run(
+        run_task(task, [], InMemoryCheckpointStore(), PerformanceStore({}), NeverCalled())
+    )
+    assert completed.state != JobState.READY_TO_SETTLE
+    assert completed.deliverable is None
 
 
 def test_multi_subtask_job_refunds_if_any_subtask_cannot_be_filled() -> None:

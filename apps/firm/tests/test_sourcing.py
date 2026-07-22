@@ -114,8 +114,8 @@ def test_the_selected_service_carries_its_own_endpoint():
     assert chosen.endpoint == "https://open-api.coinank.com/api/etf/getUsBtcEtf"
 
 
-def test_index_entries_parse_their_per_service_endpoints():
-    """The real index file must survive the model, or the fix is inert."""
+def test_runtime_index_never_labels_etf_flows_as_market_snapshot():
+    """The paid rejection is impossible at the sourcing artifact boundary."""
     import json
     from pathlib import Path
 
@@ -123,8 +123,11 @@ def test_index_entries_parse_their_per_service_endpoints():
 
     payload = json.loads(Path("../../data/vendor-index.json").read_text())
     vendors = payload["vendors"] if isinstance(payload, dict) and "vendors" in payload else payload
-    coinank = next(v for v in vendors if str(v["agent_id"]) == "2013")
-    entry = VendorIndexEntry.model_validate(coinank)
-    endpoints = {s.endpoint for s in entry.services}
-    assert len(endpoints) > 1, "per-service endpoints were dropped by the model"
-    assert any(e and "getUsEthEtf" in e for e in endpoints)
+    entries = [VendorIndexEntry.model_validate(vendor) for vendor in vendors]
+    market_services = [
+        service
+        for entry in entries
+        for service in entry.services
+        if service.capability == "market_snapshot"
+    ]
+    assert all("etf" not in f"{service.tool} {service.endpoint}".lower() for service in market_services)

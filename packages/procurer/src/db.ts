@@ -304,6 +304,7 @@ export async function quotedPriceUnits(client: pg.PoolClient | pg.Pool, taskId: 
 
 export type RefundOutcome =
   | { kind: "replay"; response: unknown }
+  | { kind: "pending"; response: unknown }
   | { kind: "in_flight" }
   | { kind: "requires_human"; detail: string }
   | { kind: "cap_exceeded"; detail: string }
@@ -328,6 +329,7 @@ export async function reserveRefund(
     const row = existing.rows[0];
     if (row) {
       if (row.state === "settled") return { kind: "replay", response: row.response };
+      if (row.state === "pending_confirmation") return { kind: "pending", response: row.response };
       if (row.state !== "released") return { kind: "in_flight" };
       await client.query("DELETE FROM procurer_refunds WHERE task_id = $1", [request.taskId]);
     }
@@ -370,12 +372,21 @@ export async function settleRefund(taskId: string, response: unknown) {
   );
 }
 
+export async function markRefundPending(taskId: string, response: unknown) {
+  await pool().query(
+    `UPDATE procurer_refunds
+     SET state = 'pending_confirmation', response = $2::jsonb, updated_at = now()
+     WHERE task_id = $1 AND state IN ('reserved', 'pending_confirmation')`,
+    [taskId, JSON.stringify(response)]
+  );
+}
+
 export async function releaseRefund(taskId: string, response: unknown) {
   await pool().query(
     `UPDATE procurer_refunds
      SET state = 'released', amount = jsonb_set(amount, '{amount}', '"0"'),
          response = $2::jsonb, updated_at = now()
-     WHERE task_id = $1 AND state = 'reserved'`,
+     WHERE task_id = $1 AND state IN ('reserved', 'pending_confirmation')`,
     [taskId, JSON.stringify(response)]
   );
 }

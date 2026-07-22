@@ -30,7 +30,8 @@ class FakeCursor:
                 deliverable,
                 provenance,
                 refund,
-            ) = params[:10]
+                attempts,
+            ) = params[:11]
             self.database["firm_jobs"][task_id] = {
                 "task_id": task_id,
                 "quote_id": quote_id,
@@ -42,6 +43,7 @@ class FakeCursor:
                 "deliverable": unwrap_jsonb(deliverable),
                 "provenance": unwrap_jsonb(provenance),
                 "refund": unwrap_jsonb(refund),
+                "attempts": unwrap_jsonb(attempts),
                 "updated_at_is_stale": self.database.get("force_stale", False),
             }
         elif normalized.startswith("INSERT INTO firm_job_checkpoints"):
@@ -56,8 +58,7 @@ class FakeCursor:
                 }
             )
         elif normalized.startswith("WITH next_job AS"):
-            states, stale_states, _stale_after_seconds, claimed_state = params
-            candidate_states = set(states) | set(stale_states)
+            states, stale_states, _stale_after_seconds, refunding_state, resume_state, claimed_state = params
             claimable = [
                 row
                 for row in self.database["firm_jobs"].values()
@@ -68,15 +69,15 @@ class FakeCursor:
                 self.result = None
                 return
             row = claimable[0]
-            row["state"] = claimed_state
+            row["state"] = resume_state if row["state"] == refunding_state else claimed_state
             self.result = row
-        elif normalized.startswith("UPDATE firm_jobs SET state = %s, updated_at = now() WHERE task_id = %s"):
-            claimed_state, task_id, first_state, second_state = params
+        elif normalized.startswith("UPDATE firm_jobs SET state = CASE"):
+            refunding_state, resume_state, claimed_state, task_id, *allowed_states = params
             row = self.database["firm_jobs"].get(task_id)
-            if row is None or row["state"] not in {first_state, second_state}:
+            if row is None or row["state"] not in set(allowed_states):
                 self.result = None
                 return
-            row["state"] = claimed_state
+            row["state"] = resume_state if row["state"] == refunding_state else claimed_state
             self.result = row
         elif "FROM firm_jobs" in normalized:
             row = self.database["firm_jobs"].get(params[0])
@@ -210,6 +211,19 @@ def test_postgres_checkpoint_store_reclaims_stale_in_progress_task(monkeypatch) 
     assert claimed is not None
     assert claimed.task_id == "t_stale"
     assert claimed.state == JobState.PLANNING
+
+
+def test_postgres_checkpoint_store_resumes_stale_refund_without_replanning(monkeypatch) -> None:
+    database = {"firm_jobs": {}, "firm_job_checkpoints": [], "vendor_performance": {}, "force_stale": True}
+    patch_connect(monkeypatch, database)
+    store = PostgresCheckpointStore("postgresql://test")
+    task = FirmTask(task_id="t_refund_resume", goal="ship firm", quote=quote(), state=JobState.REFUNDING)
+    store.save_task(task)
+
+    claimed = store.claim_next_task()
+
+    assert claimed is not None
+    assert claimed.state == JobState.REFUNDING
 
 
 def test_postgres_checkpoint_store_claims_specific_task(monkeypatch) -> None:

@@ -1,0 +1,2 @@
+ALTER TABLE firm_jobs
+  ADD COLUMN IF NOT EXISTS attempts JSONB NOT NULL DEFAULT '[]'::jsonb;

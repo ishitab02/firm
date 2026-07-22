@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 
@@ -9,7 +9,17 @@ from .models import PayAndCallRequest, PayAndCallResponse
 class Procurer(Protocol):
     async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse: ...
 
-    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, str]: ...
+    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, Any]: ...
+
+
+class RefundFailure(RuntimeError):
+    """The procurer explicitly did not settle the requested refund."""
+
+    def __init__(self, code: str, detail: str, tx: str | None = None) -> None:
+        super().__init__(f"{code}: {detail}")
+        self.code = code
+        self.detail = detail
+        self.tx = tx
 
 
 class HttpProcurer:
@@ -34,7 +44,7 @@ class HttpProcurer:
         response.raise_for_status()
         return PayAndCallResponse.model_validate(response.json())
 
-    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, str]:
+    async def refund(self, task_id: str, to_address: str, amount: dict[str, object]) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             response = await client.post(
                 f"{self.base_url}/refund",
@@ -42,7 +52,13 @@ class HttpProcurer:
                 headers=self._headers(),
             )
         response.raise_for_status()
-        return dict(response.json())
+        payload = dict(response.json())
+        if not isinstance(payload.get("tx"), str) or not payload["tx"]:
+            code = payload.get("error_code", "REFUND_FAILED")
+            detail = payload.get("detail", "procurer returned no refund transaction")
+            tx = payload.get("tx") if isinstance(payload.get("tx"), str) else None
+            raise RefundFailure(str(code), str(detail), tx)
+        return payload
 
 
 class SimulatedProcurer:

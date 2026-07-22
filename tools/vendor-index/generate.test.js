@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { toBaseUnits , documentedExampleArgs} from "./generate.js";
+import { toBaseUnits, documentedExampleArgs, inferCapability } from "./generate.js";
 
 // The marketplace reports fees as decimals ("0.000015"), but every amount that
 // reaches a cap check or a payment has to be an exact base-unit integer. A
@@ -81,4 +81,48 @@ test("documentedExampleArgs copies a published literal and refuses to guess", ()
   );
   // No description at all.
   assert.equal(documentedExampleArgs({}), null);
+});
+
+test("market snapshot inference requires the actual technical-analysis contract", () => {
+  assert.equal(
+    inferCapability({
+      serviceName: "Crypto technical snapshot",
+      serviceDescription: "BTC or ETH spot price action and candle trend with support and resistance by symbol."
+    }),
+    "market_snapshot"
+  );
+  assert.equal(
+    inferCapability({
+      serviceName: "US ETH ETF",
+      serviceDescription: "Ethereum ETF fund holdings, issuer NAV and daily flows market data."
+    }),
+    null
+  );
+  assert.equal(
+    inferCapability({ serviceName: "Market news report", serviceDescription: "Research, sentiment and news analysis." }),
+    null
+  );
+  assert.equal(
+    inferCapability({ serviceName: "Prediction market chart", serviceDescription: "Candlestick price history for an event." }),
+    null
+  );
+  assert.equal(
+    inferCapability({ serviceName: "US stock bars", serviceDescription: "Historical OHLC bars by symbol." }),
+    null
+  );
+  assert.equal(
+    inferCapability({ serviceName: "Kline Lists", serviceDescription: "Kline market data for crypto analysis." }),
+    "market_snapshot"
+  );
+});
+
+test("token launch inference does not turn deployment or audit prose into a launch service", () => {
+  assert.equal(
+    inferCapability({ serviceName: "Token launch studio", serviceDescription: "Create a token with tokenomics." }),
+    "token_launch"
+  );
+  assert.equal(
+    inferCapability({ serviceName: "Contract audit", serviceDescription: "Audit a contract before deployment." }),
+    null
+  );
 });

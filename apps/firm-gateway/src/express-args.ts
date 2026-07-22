@@ -65,6 +65,29 @@ export function expressJobTypes(): string[] {
 
 export type ExpressArgs = { job_type: string; params: Record<string, unknown> };
 
+const SUPPORTED_MARKET_TIMEFRAMES = new Set([
+  "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "1w"
+]);
+
+/** A free, deterministic precondition check run before any authorization settles. */
+export function expressInputFailure(call: ExpressArgs): string | null {
+  if (call.job_type !== "market_snapshot") return `unsupported Express job type ${call.job_type}`;
+  const symbol = call.params.symbol;
+  const timeframe = call.params.timeframe;
+  const prompt = call.params.prompt;
+  if (typeof symbol !== "string" || !symbol.trim()) return "symbol is required";
+  if (typeof timeframe !== "string" || !timeframe.trim()) return "timeframe is required";
+  if (!SUPPORTED_MARKET_TIMEFRAMES.has(timeframe.trim().toLowerCase())) {
+    return `unsupported timeframe ${JSON.stringify(timeframe)}`;
+  }
+  if (typeof prompt !== "string" || !prompt.trim()) return "prompt is required";
+  const supportedFocus = ["price", "trend", "support", "resistance", "market", "snapshot", "technical"];
+  if (!supportedFocus.some((term) => prompt.toLowerCase().includes(term))) {
+    return "prompt must request a market or technical snapshot";
+  }
+  return null;
+}
+
 export function normaliseExpressArgs(args: unknown): ExpressArgs | null {
   if (typeof args !== "object" || args === null || Array.isArray(args)) return null;
   const bag = args as Record<string, unknown>;
