@@ -77,11 +77,36 @@ function expressTimeoutMs(): number {
 /** job_type -> vendor capability. Only the locked job types appear here. */
 const EXPRESS_CAPABILITY: Record<string, string> = { market_snapshot: "market_snapshot" };
 
-async function readJson(req: http.IncomingMessage): Promise<any> {
+/** Returned instead of throwing when a body will not parse. */
+export const MALFORMED_BODY = Symbol("malformed-body");
+
+/**
+ * Read a request body, normalising everything that is not a JSON object.
+ *
+ * JSON has six top-level shapes and only one of them can carry a tool call.
+ * The other five used to reach the router: `null` threw on `body.id` and Fly
+ * reported 502, arrays and bare strings fell through to HTTP 200 UNKNOWN_TOOL,
+ * and unparseable input surfaced as a 500 with the raw SyntaxError echoed to
+ * the caller.
+ *
+ * All of that is the same defect the marketplace review already rejected this
+ * endpoint for: a paid resource answering an unpaid request with something
+ * other than 402. Non-objects normalise to `{}`, which routes to the single
+ * paid product and gets a price like any other unpaid call. Unparseable bodies
+ * are a client error and say so, without quoting the parser.
+ */
+async function readJson(req: http.IncomingMessage): Promise<any | typeof MALFORMED_BODY> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(Buffer.from(chunk));
   if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    return MALFORMED_BODY;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+  return parsed;
 }
 
 function send(res: http.ServerResponse, status: number, body: unknown) {
@@ -476,6 +501,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const body = await readJson(req);
+    if (body === MALFORMED_BODY) {
+      send(res, 400, { error: { code: "INVALID_JSON", detail: "request body is not valid JSON" } });
+      return;
+    }
     const dispatch = mcpDispatch(body);
 
     if (dispatch.kind === "notification") {

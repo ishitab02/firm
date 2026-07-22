@@ -140,3 +140,38 @@ describe("the buyer request the marketplace listing documents", () => {
     expect(directExpressCall({ ticker: "ETH" })).not.toBeNull();
   });
 });
+
+
+/**
+ * JSON has six top-level shapes and only one can carry a tool call. The other
+ * five reached the router in production: `null` threw on `body.id` and Fly
+ * returned 502, arrays and bare strings fell through to HTTP 200 UNKNOWN_TOOL,
+ * and unparseable input surfaced as a 500 quoting the raw SyntaxError.
+ *
+ * Every one of those is the defect the marketplace review already rejected this
+ * endpoint for: a paid resource answering an unpaid request with anything other
+ * than 402.
+ */
+describe("non-object request bodies", () => {
+  it("treats a non-object body as an empty purchase attempt, not a tool call", () => {
+    // normaliseExpressArgs is what {} routes into; it must yield the one product.
+    const call = directExpressCall({});
+    expect(call).not.toBeNull();
+    expect(call!.job_type).toBe("market_snapshot");
+  });
+
+  it("never mistakes an array or a scalar for a tool call", () => {
+    for (const bad of [[1, 2], "hello" as unknown, 42 as unknown, null]) {
+      expect(directExpressCall(bad)).toBeNull();
+      expect(isJsonRpcRequest(bad)).toBe(false);
+    }
+  });
+
+  // mcpDispatch reads a body without `method` as the legacy {tool, args} REST
+  // form. Given a non-object it must not throw — that crash was the 502.
+  it("dispatches non-objects without throwing", () => {
+    for (const bad of [null, [1, 2], "hello" as unknown, 42 as unknown]) {
+      expect(() => mcpDispatch(bad as any)).not.toThrow();
+    }
+  });
+});
