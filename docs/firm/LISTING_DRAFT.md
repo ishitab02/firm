@@ -118,23 +118,34 @@ Cleared (2026-07-22):
   folded into the base scores.
 - ~~Express job type lock~~ — `market_snapshot`, locked.
 
+Also cleared (2026-07-23):
+
+- ~~Three-component maintenance deployment~~ — procurer v5, worker v10, gateway
+  v12 all shipped; Express buys from OKLink in production and one purchase is
+  verified on chain.
+- ~~**Drop Firm Projects**~~ — **REVERSED, do not drop it.** Projects is now a
+  distinct working product at `/projects`, not a broken duplicate of Express:
+  2–4 legs, per-leg vendor purchase, all-or-nothing assembly, and it authorizes
+  → validates → settles rather than charging up front. `x402-check` returns
+  `valid: true` on a bare `{}` body.
+- ~~Wallet rotation before submitting~~ — decided: ship now, rotate after the
+  deadline. Recorded as an accepted risk in `docs/status/F1.md`. `0xC029…50e0`
+  must not accumulate meaningful value before it is rotated.
+
 Open:
 
-- **Decide whether to rotate the Firm wallet.** A private key for `0xC029…50e0`
-  was exposed in a session transcript. Rotating changes `payTo` in every 402
-  challenge, so it changes this listing — decide before submitting, not after.
-  See `docs/status/F1.md`.
-- **Three-component maintenance deployment is outstanding.** `packages/procurer`,
-  `apps/firm` and `apps/firm-gateway` are all behind `main`. Express does not buy
-  from OKLink in production until this ships. Order is **procurer -> worker ->
-  gateway** (the worker deploy runs the migrations; the public surface goes last),
-  and Express should be unlisted for the window.
+- **No live 1 USDT Projects purchase has ever run.** Express was listed and
+  technically valid while returning BTC data for ETH requests — that is exactly
+  how round 2 happened. A passing validator is not a working product. Do not
+  point service 36228 at `/projects` until one real purchase completes.
+- **Point service 36228 at `/projects`** — it currently points at the Express
+  root URL (Ishita), after the purchase above.
 - **Reconcile the stuck `accepted` task** — settle its payment/refund state.
   Closing an unresolved financial record is not the same as resolving it (Ishita).
-- **Drop Firm Projects from `#7138`** so the listing offers only what a reviewer
-  can actually buy (Ishita).
-- **Request David's re-test** — only after all of the above. The currently
-  deployed worker still reproduces his round-2 finding.
+- **Request David's re-test** — only after all of the above.
+- **No external customer has ever bought anything.** Every purchase to date was
+  ours. This is the largest remaining gap in the entry and David's re-test is
+  the most likely thing to close it.
 
 ## Evidence to Attach
 
