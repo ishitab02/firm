@@ -3,10 +3,71 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .models import Constraints, VendorIndexEntry, VendorPerformance
+from .validation import _SYMBOL_ALIASES
 
 
 def clamp(value: int, low: int = 0, high: int = 100) -> int:
     return max(low, min(high, value))
+
+
+def select_service(services: list, capability: str, request: dict | None):
+    """Pick WHICH of a vendor's services to call, not merely whether it has one.
+
+    This existed as `next(s for s in vendor.services if s.capability == capability)`
+    — the first match wins. CoinAnk #2013 publishes **80** services, all tagged
+    `market_snapshot`, and the first is `getUsBtcEtf`. So every request routed to
+    that vendor called the Bitcoin ETF endpoint regardless of what was asked,
+    which is how a reviewer asking for ETH was billed for BTC data twice.
+
+    The vendor was not at fault and neither was the capability tag. Nothing ever
+    chose between eighty equally-tagged endpoints, and the sibling it should have
+    picked — `getUsEthEtf` — was live and payable the whole time.
+
+    Selection is by name, because that is the only signal these services offer:
+    none of the eighty documents an argument schema, but they are self-describing
+    (`US ETH ETF`, `Pair Last Price`). A service naming the requested symbol is
+    preferred; one naming a *different* symbol is actively avoided, since calling
+    it is how we produce a confidently wrong answer rather than an honest failure.
+    """
+    matching = [service for service in services if service.capability == capability]
+    if not matching:
+        return None
+
+    wanted = None
+    if request:
+        raw = request.get("symbol") or request.get("asset") or request.get("ticker")
+        if isinstance(raw, str) and raw.strip():
+            wanted = raw.strip().upper()
+
+    if wanted is None:
+        return matching[0]
+
+    aliases = _SYMBOL_ALIASES.get(wanted, (wanted.lower(),))
+    others = {
+        alias
+        for symbol, symbol_aliases in _SYMBOL_ALIASES.items()
+        if symbol != wanted
+        for alias in symbol_aliases
+    }
+
+    def rank(service) -> tuple[int, int]:
+        # VendorService carries `tool` and not `endpoint` -- the endpoint lives on
+        # the parent index entry, and Pydantic drops the per-service copy. The
+        # tool name is the signal that matters anyway ("US ETH ETF"), but read
+        # the endpoint defensively so this still works if the model gains it.
+        endpoint = getattr(service, "endpoint", "") or ""
+        text = f"{service.tool or ''} {endpoint}".lower()
+        names_wanted = any(alias in text for alias in aliases)
+        names_other = any(alias in text for alias in others)
+        if names_wanted and not names_other:
+            return (0, matching.index(service))  # exactly what was asked for
+        if not names_wanted and not names_other:
+            return (1, matching.index(service))  # symbol-agnostic, plausibly usable
+        if names_wanted and names_other:
+            return (2, matching.index(service))  # mentions both; ambiguous
+        return (3, matching.index(service))  # names a different asset — last resort
+
+    return min(matching, key=rank)
 
 
 def effective_score(vendor: VendorIndexEntry, performance: VendorPerformance | None) -> int:

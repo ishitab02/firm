@@ -16,7 +16,7 @@ from .models import (
 )
 from .config import get_settings
 from .procurer import Procurer, SimulatedProcurer
-from .sourcing import PerformanceStore, rank_candidates
+from .sourcing import select_service, PerformanceStore, rank_candidates
 from .storage import CheckpointStore
 from .validation import validate
 
@@ -160,9 +160,13 @@ async def _procure_subtask(
     task = state["task"]
     store = state["store"]
     for vendor in candidates:
-        service = next(
-            (candidate for candidate in vendor.services if candidate.capability == subtask.capability),
-            None,
+        # WHICH service, not merely whether one exists. CoinAnk publishes 80
+        # services all tagged market_snapshot; taking the first meant every
+        # request hit its Bitcoin ETF endpoint whatever was asked for.
+        service = select_service(
+            vendor.services,
+            subtask.capability,
+            dict(task.params) if task.params else None,
         )
         if service is None:
             continue
