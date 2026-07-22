@@ -138,6 +138,54 @@ job's candidates.
 
 ---
 
+## Postscript: the dataset predicted our own production run
+
+_Narrative section, added 2026-07-22. The figures above are computed from the
+scan; the account below is from our own job records and X Layer, cited so it
+can be checked._
+
+A day after this scan we put real money through the marketplace — a paid job
+on our own endpoint, hiring from this same population. It reproduced the
+dataset almost exactly.
+
+It worked through candidates in ranked order. The first three it reached were
+all agents this scan had already recorded as dead — Predexon (#2143, HTTP
+error), Proof of Behavior (#5082, unreachable) and Scope (#3733, unreachable)
+— and two more dead agents (#3118, #5175) came further down the same list.
+
+Two candidates were refused before any signature because their live price
+exceeded the job's ceiling: Clawby (#3209) and SignalForge AI (#6560), both of
+which appear in the mispricing table above. That is this report's second
+finding meeting a spend cap in production.
+
+Worth noting against the easy conclusion: two candidates that this scan
+recorded as healthy — #5524 and #5557, both answering with a valid challenge —
+were reached and still returned nothing usable. A conformant 402 means a
+seller can take your money, not that it will do the work. This report measures
+the first property and cannot measure the second.
+
+No vendor delivered. The job refunded its buyer in full, automatically, and
+absorbed the vendor cost it had already paid.
+
+The proximate cause was ours, not the marketplace's. Our ranking used
+marketplace-reported reputation, which carries no liveness signal, so a dead
+endpoint with good stats outranked a live one. We had this dataset and were
+not ranking on it. Folding the measured verdicts in took dead-agent attempts
+in the next run to zero.
+
+That run still failed, and again it was us: our validator rejected a live
+vendor's genuine data because its success code was one we did not recognise.
+With that fixed, the job completed through CoinAnk (#2013) in twelve seconds.
+
+Three things are worth taking from it. The failure rate reported here is not
+an abstraction — it is what a buyer meets, in order, on a first real job. A
+reliability dataset is only worth what you rank on, and we published this
+problem before we had fixed our own exposure to it. And liveness is a floor,
+not a guarantee: the two hardest failures came from endpoints that answered
+correctly and delivered nothing.
+
+---
+
 ## Raw data
 
 - `data/marketplace-health-2026-07-21.json` — every probe result, with verdict, latency, attempts, and both prices

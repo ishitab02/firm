@@ -1,65 +1,108 @@
 # 90-second storyboard and voiceover
 
-Run `pnpm -F @firm/demo film:paced`. Record the terminal at roughly 110
-columns. The labels in the command output are part of the integrity story; keep
-them visible in the final cut.
+Rewritten 2026-07-22. The previous cut carried a `SIMULATED` failure sequence
+because no real one existed. One does now — a paid job that hired five vendors,
+fired all five, refunded the buyer automatically and absorbed the cost — so the
+most important twenty seconds of this video are real footage instead of a
+labelled reconstruction. Nothing in this cut needs a SIMULATED badge.
+
+Record the terminal at roughly 110 columns. The integrity labels in the command
+output are part of the story; keep them legible in the final cut.
+
+**One disclosure that must stay on screen.** Every purchase shown was made from
+our own wallet as QA. It is evidence the machine runs, not a customer. Where a
+buyer appears, the badge reads `OUR OWN WALLET · QA` — never "customer". A judge
+who goes looking for an undisclosed self-purchase should find nothing, because
+there is nothing to find.
+
+---
 
 ## 0:00–0:08 — Hook
 
-**Screen:** Firm logo/title, then the first three lines from the demo command.
+**Screen:** title, then the first lines of the demo command.
 
-**Voiceover:** “OKX gives one founder an agent workforce. But who checks that
-workers are alive, honest on price, and useful? We built the employer.”
+**Voiceover:** "OKX gives one founder an agent workforce. Nobody checks whether
+those workers are alive, honest about price, or any good. We built the employer."
 
-## 0:08–0:30 — Live background check
+## 0:08–0:26 — The background check, live and unpaid
 
-**Screen:** `LIVE / UNPAID`. Let the current shortlist probe run. Hold on the
-worst live mismatch and the pre-signature refusal.
+**Screen:** `LIVE / UNPAID`. Hold on the worst live mismatch and the
+pre-signature refusal.
 
-**Voiceover:** “Before spending, The Firm probes each candidate’s live endpoint
-and reads its payment challenge. This is live; nothing is signed. This vendor
-lists 0.005 USDT but asks 3 USDT—600 times more—so The Firm refuses before money
-moves.”
+**Voiceover:** "Before spending anything, The Firm reads each candidate's live
+payment challenge. Nothing is signed. This one lists 0.005 USDT and demands 3 —
+six hundred times more — so The Firm refuses before a signature exists."
 
-If the vendor fixes its price before recording, narrate the current output. Do
-not reuse “600 times” unless that run prints it.
+Narrate whatever the run actually prints. Do not say "six hundred times" unless
+that run prints it.
 
-## 0:30–0:42 — Research result
+## 0:26–0:38 — What the probe found
 
-**Screen:** `JULY 21 SNAPSHOT / UNPAID` lines.
+**Screen:** the July 21 snapshot lines.
 
-**Voiceover:** “Our July 21 ten-query search snapshot found 95 endpoint-bearing
-agents among 218. Forty-one failed unpaid preflight: nine unreachable and 32
-unusable HTTP responses. Seven returned 200 without a challenge; five of those
-advertised nonzero fees.”
+**Voiceover:** "We probed every endpoint-bearing agent on the marketplace —
+ninety-five of them. Forty-one failed unpaid preflight. Nothing was signed and
+nothing was spent."
 
-## 0:42–0:57 — Real payment evidence
+## 0:38–0:52 — A buyer pays, and it settles
 
-**Screen:** `REAL / SETTLED`, the two hashes, and their OKLink links.
+**Screen:** the 402 challenge, then the settle receipt and its X Layer hash.
+Badges: `REAL · SETTLED` and `OUR OWN WALLET · QA`.
 
-**Voiceover:** “The buyer path is real: two settled X Layer payments to OKLink’s
-marketplace agent, including one from the full worker graph. A retry reused the
-receipt instead of paying twice. These are procurement costs, not revenue.”
+**Voiceover:** "A buyer calls the endpoint and gets a price. They pay it. OKX's
+facilitator settles it on X Layer. This purchase is ours — we bought from
+ourselves to prove the path, and we label it that way."
 
-## 0:57–1:18 — Failure guarantee
+## 0:52–1:12 — It fails, and the guarantee pays out. Real.
 
-**Screen:** `SIMULATED`, then the compact fixture sequence and economics.
+**Screen:** the progress log, one vendor per line, firing in sequence. Then the
+refund transaction.
 
-**Voiceover:** “This failure is explicitly simulated; we will not fabricate a
-real vendor incident. The Firm quotes a fixed price, rejects a low-trust
-candidate, fires invalid output, replaces the vendor, and absorbs the extra
-cost. The customer still gets one result at the quoted price.”
+**Voiceover:** "Then the work goes wrong. The Firm hires, pays a vendor, and the
+result fails validation. It fires that vendor and hires the next. Five in a row
+fail. So it refunds the buyer in full, automatically, and absorbs the vendor
+cost out of its own margin. Nobody triggered that. It is what the fixed price
+buys."
 
-## 1:18–1:30 — Close
+The most important beat in the video. Hold on the fired-vendor lines long enough
+to read them, and on `DELIVERY_FAILED_REFUNDED` with the refund hash. Two
+on-chain transactions sixteen blocks apart: money in, money back.
 
-**Screen:** `THE PRODUCT` final four lines, then the live Firm listing or
-submission card added during editing.
+Worth saying out loud if there is room: our own probe predicted this. We
+published that 43% of these endpoints were dead, then tried to buy from them and
+watched it happen.
 
-**Voiceover:** “One goal, one budget, one accountable result—with live checks,
-capped payments, and a receipt showing who worked and what it cost. The Firm is
-the agent economy’s prime contractor.”
+## 1:12–1:24 — And when it works
 
-Do not show a fake refund, call outbound spend revenue, or imply the simulated
-fallback was a production incident. If a genuine inbound customer payment lands
-before recording, add it as a separate `REAL / CUSTOMER` card; otherwise say
-nothing about revenue.
+**Screen:** the completed run — real ETF holdings returning inline — then the
+economics block.
+
+**Voiceover:** "Stop ranking dead endpoints above live ones, and the same job
+completes in twelve seconds with real market data. Price, a tenth of a dollar.
+Vendor cost, a thousandth. The rest is margin, and every line reconciles against
+the chain."
+
+```
+user price            100000
+vendor costs         −  1000
+─────────────────────────────
+margin retained         99000
+```
+
+## 1:24–1:30 — Close
+
+**Screen:** near-black. One line.
+
+**Voiceover:** "Someone has to check first. That's the job."
+
+---
+
+## What must NOT appear in this cut
+
+- Any framing of a QA purchase as customer revenue, demand or traction.
+- The word "Darwinian". The ledger holds nine vendors scored from real paid
+  outcomes, which is worth showing — but a vendor's score demoting it on a
+  *later* job has not been demonstrated, so the claim is "adaptive fallback with
+  accumulated performance evidence".
+- Firm Projects, while it is registered on the listing and failing `x402-check`.
+- Any transaction hash not verifiable on X Layer at the moment of filming.
