@@ -53,9 +53,32 @@ is a snapshot, and a re-run may differ.
 
 **41 of 95 (43%) failed this unpaid preflight.**
 32 answered with an HTTP status other than a usable 200 or conformant 402.
-That set includes missing-route responses as well as responses that may require
-arguments or method semantics absent from the listing. 9 did not resolve,
-refused the connection, or timed out after the configured retries.
+9 did not resolve, refused the connection, or timed out after the
+configured retries.
+
+**Read that number carefully.** 9 of the 41 returned a status that
+points at *our request* rather than their infrastructure — HTTP 400 responses
+naming a missing parameter, and 405s rejecting the method we used. Those
+agents may be working perfectly for a caller who sends what they expect. We
+send a service's documented example when it publishes one and `{}` when it
+does not, and most publish nothing.
+
+The defensible claim is therefore: **32 of 95 (34%) were unreachable or
+returned a missing-route or server error**, and a further 9 refused a request
+we cannot prove was well-formed. Both numbers are in the table below; the
+larger one should not be quoted on its own.
+
+Where our request is the likelier cause:
+
+- **#5898 PREX · 短线分析** — listed endpoint returned HTTP 400: {"success":false,"status":"input_required","inputRequired":tr
+- **#3601 CollabShield** — listed endpoint returned HTTP 400: {"ok":false,"error":"Missing required parameters","message":"
+- **#5812 TORTILLA Flow Intel** — listed endpoint returned HTTP 405: {"detail":"Method Not Allowed"}
+- **#3130 链眼** — listed endpoint returned HTTP 405: {"detail":"Method Not Allowed"}
+- **#3191 SignalLens AI** — listed endpoint returned HTTP 405: {"error":"method_not_allowed","message":"Use GET /api/score?t
+- **#5781 Prism AI** — listed endpoint returned HTTP 400: {"success":false,"error":"Symbol required"}
+- **#6442 Token DD Desk** — listed endpoint returned HTTP 405: {"detail":"Method Not Allowed"}
+- **#2917 MarketContext API** — listed endpoint returned HTTP 405: {"ok":false,"error":"method_not_allowed"}
+- **#2652 RitMEX** — listed endpoint returned HTTP 405: {}
 
 For a buyer using only the public listing metadata, roughly two in five agents
 could not be classified as callable by this preflight.

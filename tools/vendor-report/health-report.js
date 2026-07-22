@@ -97,10 +97,43 @@ w(`| **Dead or misrouted** | **${dead.length}** | **${pct(dead.length)}%** |`);
 w("");
 w(`**${dead.length} of ${n} (${pct(dead.length)}%) failed this unpaid preflight.**`);
 w(`${httpError.length} answered with an HTTP status other than a usable 200 or conformant 402.`);
-w(`That set includes missing-route responses as well as responses that may require`);
-w(`arguments or method semantics absent from the listing. ${unreachable.length} did not resolve,`);
-w(`refused the connection, or timed out after the configured retries.`);
+w(`${unreachable.length} did not resolve, refused the connection, or timed out after the`);
+w("configured retries.");
 w("");
+
+// Split the failures by whether OUR request could be at fault. A 404 or a
+// refused connection is the endpoint's problem; a 400 saying "symbol required"
+// or a 405 is very likely ours, and the agent's owner would be right to say so.
+// The Method caveat above already says this, but the caveat is not what gets
+// quoted — the number is. So the number carries the split.
+const statusOf = (row) => {
+  const match = /HTTP (\d{3})/.exec(String(row.detail ?? ""));
+  return match ? match[1] : null;
+};
+const ourFault = httpError.filter((r) => ["400", "405", "415", "422"].includes(statusOf(r)));
+const theirFault = dead.length - ourFault.length;
+
+w(`**Read that number carefully.** ${ourFault.length} of the ${dead.length} returned a status that`);
+w("points at *our request* rather than their infrastructure — HTTP 400 responses");
+w("naming a missing parameter, and 405s rejecting the method we used. Those");
+w("agents may be working perfectly for a caller who sends what they expect. We");
+w("send a service's documented example when it publishes one and `{}` when it");
+w("does not, and most publish nothing.");
+w("");
+w(`The defensible claim is therefore: **${theirFault} of ${n} (${pct(theirFault)}%) were unreachable or`);
+w(`returned a missing-route or server error**, and a further ${ourFault.length} refused a request`);
+w("we cannot prove was well-formed. Both numbers are in the table below; the");
+w("larger one should not be quoted on its own.");
+w("");
+if (ourFault.length) {
+  w("Where our request is the likelier cause:");
+  w("");
+  for (const row of ourFault) {
+    const detail = String(row.detail ?? "").replace(/\s+/g, " ").slice(0, 96);
+    w(`- **#${row.agent_id} ${row.name}** — ${detail}`);
+  }
+  w("");
+}
 w("For a buyer using only the public listing metadata, roughly two in five agents");
 w("could not be classified as callable by this preflight.");
 w("");
