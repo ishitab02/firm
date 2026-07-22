@@ -21,12 +21,17 @@ export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const TOOL_DEFINITIONS = [
   {
     name: "get_quote",
-    description: "Free. Quote a fixed price to deliver a goal within a budget and constraints.",
+    description:
+      "Free. Quote a 2-4 leg BTC/ETH market-research project across supported timeframes. Unsupported goals are refused before payment.",
     inputSchema: {
       type: "object",
       required: ["goal", "budget_cap"],
       properties: {
-        goal: { type: "string" },
+        goal: {
+          type: "string",
+          description:
+            "Name BTC and/or ETH plus 1h, 2h, 4h and/or 1d. Projects requires at least two symbol/timeframe legs."
+        },
         budget_cap: {
           type: "object",
           required: ["amount", "decimals"],
@@ -45,7 +50,8 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: "execute",
-    description: "Paid at the quoted price. Start a job from a quote and return its task_id.",
+    description:
+      "Paid at the quoted price. Procure every quoted market-research leg, validate each one, assemble the result with provenance, or refund in full.",
     inputSchema: { type: "object", required: ["quote_id"], properties: { quote_id: { type: "string" } } }
   },
   {

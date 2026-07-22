@@ -16,10 +16,14 @@ describe("gateway pricing", () => {
     expect(quotePrice([usdt(300_000), usdt(200_000)], "QUOTED_AMOUNT").amount).toBe("1000000");
   });
 
-  it("plans mixed market launch goals into two subtasks", () => {
-    expect(estimatePlan("market and launch briefing").map((item) => item.capability)).toEqual([
-      "market_snapshot",
-      "token_launch"
+  it("prices one estimate per supported Projects leg", () => {
+    expect(estimatePlan("Compare BTC and ETH on 4h market trend").map((item) => item.subtask)).toEqual([
+      "BTC 4h market snapshot",
+      "ETH 4h market snapshot"
     ]);
+  });
+
+  it("does not fabricate a plan for an unsupported goal", () => {
+    expect(estimatePlan("launch a token")).toEqual([]);
   });
 });

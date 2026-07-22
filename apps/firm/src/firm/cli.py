@@ -26,6 +26,7 @@ from .models import (
     VendorIndexEntry,
     VendorService,
 )
+from .market_snapshot import VENDOR_AGENT_ID, VENDOR_AGENT_NAME, VENDOR_SERVICE_NAME
 from .sourcing import PerformanceStore
 from .storage import InMemoryCheckpointStore, apply_migrations
 from .storage import PostgresCheckpointStore, PostgresPerformanceStore
@@ -34,7 +35,20 @@ from .worker import run_loop, run_one, run_task_by_id
 
 class DemoProcurer:
     async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
-        if "flaky" in request.vendor_endpoint:
+        if request.tool == VENDOR_SERVICE_NAME:
+            now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            hour_ms = 3_600_000
+            is_btc = str(request.args.get("tokenAddress", "")).lower().startswith("0x2260")
+            base = 65_000 if is_btc else 1_900
+            rows = [
+                {
+                    "price": str(base + (index % 7) * (10 if is_btc else 3)),
+                    "time": str(now_ms - index * hour_ms),
+                }
+                for index in range(50)
+            ]
+            result = {"code": "0", "msg": "", "data": json.dumps(rows)}
+        elif "flaky" in request.vendor_endpoint:
             result = {
                 "headline": "Stale launch brief",
                 "generated_at": "2026-07-10T12:00:00Z",
@@ -190,7 +204,11 @@ async def run_work_once() -> None:
 
 async def run_work_once_demo() -> None:
     settings = get_settings()
-    result = await run_one(settings, vendors=demo_vendors(prefix="gateway-demo"), procurer=DemoProcurer())
+    result = await run_one(
+        settings,
+        vendors=[demo_market_vendor(), *demo_vendors(prefix="gateway-demo")],
+        procurer=DemoProcurer(),
+    )
     print(
         json.dumps(
             {
@@ -209,7 +227,7 @@ async def run_work_task_demo(task_id: str) -> None:
     result = await run_task_by_id(
         settings,
         task_id,
-        vendors=demo_vendors(prefix=f"gateway-demo-{task_id}"),
+        vendors=[demo_market_vendor(), *demo_vendors(prefix=f"gateway-demo-{task_id}")],
         procurer=DemoProcurer(),
     )
     print(
@@ -398,6 +416,27 @@ def demo_vendors(prefix: str = "mock") -> list[VendorIndexEntry]:
             last_verified_at="2026-07-18T00:00:00Z",
         )
     ]
+
+
+def demo_market_vendor() -> VendorIndexEntry:
+    """SIMULATED index row shaped like the verified production supplier."""
+    endpoint = "https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history"
+    return VendorIndexEntry(
+        agent_id=VENDOR_AGENT_ID,
+        name=VENDOR_AGENT_NAME,
+        endpoint=endpoint,
+        services=[
+            VendorService(
+                tool=VENDOR_SERVICE_NAME,
+                capability="market_snapshot",
+                endpoint=endpoint,
+                price=Money.usdt(15),
+            )
+        ],
+        kya_base_score=93,
+        flags=[],
+        last_verified_at="2026-07-22T00:00:00Z",
+    )
 
 
 if __name__ == "__main__":

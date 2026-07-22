@@ -292,6 +292,167 @@ def test_express_buys_its_price_series_and_records_the_hire() -> None:
     }
 
 
+def test_projects_procures_and_validates_every_market_research_leg() -> None:
+    """Projects is not a higher-priced alias for Express.
+
+    A quoted project contains multiple independently paid, validated contracts;
+    the worker assembles the bundle only after all of them deliver.
+    """
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    hour = 3_600_000
+
+    class MultiLegPriceVendor:
+        def __init__(self) -> None:
+            self.calls: list[PayAndCallRequest] = []
+
+        async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
+            self.calls.append(request)
+            is_btc = request.args["tokenAddress"].lower().startswith("0x2260")
+            base = 65_000 if is_btc else 1_900
+            rows = [
+                {"price": str(base + (i % 7) * (10 if is_btc else 3)), "time": str(now_ms - i * hour)}
+                for i in range(50)
+            ]
+            return PayAndCallResponse(
+                ok=True,
+                result={"code": "0", "msg": "", "data": json.dumps(rows)},
+                receipt=PayAndCallReceipt(
+                    amount=Money.usdt(15),
+                    tx=f"0xvendor{len(self.calls)}",
+                    payment_response="e30=",
+                ),
+            )
+
+        async def refund(self, task_id, to_address, amount):
+            raise AssertionError("a delivered project must not refund")
+
+    requests = [
+        {
+            "subtask": "BTC 4h market snapshot",
+            "symbol": "BTC",
+            "timeframe": "4h",
+            "prompt": "Compare BTC and ETH on 4h: price action, trend, support and resistance",
+        },
+        {
+            "subtask": "ETH 4h market snapshot",
+            "symbol": "ETH",
+            "timeframe": "4h",
+            "prompt": "Compare BTC and ETH on 4h: price action, trend, support and resistance",
+        },
+    ]
+    project_quote = Quote(
+        quote_id="q_project",
+        price=Money.usdt(1_000_000),
+        plan_summary=[
+            {"subtask": request["subtask"], "capability": "market_snapshot"}
+            for request in requests
+        ],
+        valid_until=datetime.now(timezone.utc),
+        buyer_address="0xbuyer",
+    )
+    task = FirmTask(
+        task_id="t_project",
+        goal=requests[0]["prompt"],
+        quote=project_quote,
+        params={"project_requests": requests},
+        state=JobState.PAID,
+    )
+    vendor = MultiLegPriceVendor()
+
+    completed = asyncio.run(
+        run_task(task, [_express_vendor()], InMemoryCheckpointStore(), PerformanceStore({}), vendor)
+    )
+
+    assert completed.state == JobState.COMPLETE
+    assert len(vendor.calls) == 2
+    assert [call.subtask_id for call in vendor.calls] == [
+        "BTC 4h market snapshot",
+        "ETH 4h market snapshot",
+    ]
+    assert completed.deliverable is not None
+    legs = completed.deliverable["result"]["subtasks"]
+    assert [leg["result"]["symbol"] for leg in legs] == ["BTC", "ETH"]
+    assert all(leg["result"]["timeframe"] == "4h" for leg in legs)
+    assert completed.provenance is not None
+    assert [hire.agent_id for hire in completed.provenance.hires] == ["2023", "2023"]
+    assert completed.provenance.economics.actual_vendor_costs.units() == 30
+    assert completed.provenance.guarantee_status == "delivered"
+    assert completed.provenance.data_sources == [
+        "OKLink Onchain Data Explorer #2023 purchased price series"
+    ]
+
+
+def test_projects_refunds_all_or_nothing_when_a_later_leg_fails() -> None:
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    hour = 3_600_000
+
+    class SecondLegFails:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def pay_and_call(self, request: PayAndCallRequest) -> PayAndCallResponse:
+            self.calls += 1
+            rows = (
+                [{"price": str(65_000 + i), "time": str(now_ms - i * hour)} for i in range(50)]
+                if self.calls == 1
+                else []
+            )
+            return PayAndCallResponse(
+                ok=True,
+                result={"code": "0", "data": json.dumps(rows)},
+                receipt=PayAndCallReceipt(
+                    amount=Money.usdt(15), tx=f"0xvendor{self.calls}", payment_response="e30="
+                ),
+            )
+
+        async def refund(self, task_id, to_address, amount):
+            return {"tx": "0xfullrefund"}
+
+    prompt = "Compare BTC and ETH on 4h: market trend and support/resistance"
+    requests = [
+        {"subtask": "BTC 4h market snapshot", "symbol": "BTC", "timeframe": "4h", "prompt": prompt},
+        {"subtask": "ETH 4h market snapshot", "symbol": "ETH", "timeframe": "4h", "prompt": prompt},
+    ]
+    project_quote = Quote(
+        quote_id="q_project_failure",
+        price=Money.usdt(1_000_000),
+        plan_summary=[
+            {"subtask": request["subtask"], "capability": "market_snapshot"}
+            for request in requests
+        ],
+        valid_until=datetime.now(timezone.utc),
+        buyer_address="0xbuyer",
+    )
+    task = FirmTask(
+        task_id="t_project_failure",
+        goal=prompt,
+        quote=project_quote,
+        params={"project_requests": requests},
+        state=JobState.PAID,
+    )
+
+    completed = asyncio.run(
+        run_task(
+            task,
+            [_express_vendor()],
+            InMemoryCheckpointStore(),
+            PerformanceStore({}),
+            SecondLegFails(),
+        )
+    )
+
+    assert completed.state == JobState.FAILED_REFUNDED
+    assert completed.refund is not None and completed.refund["tx"] == "0xfullrefund"
+    assert completed.deliverable is None
+    assert completed.provenance is not None
+    assert completed.provenance.guarantee_status == "refunded"
+    assert completed.provenance.economics.actual_vendor_costs.units() == 30
+    assert completed.provenance.economics.margin_retained_or_absorbed == {
+        "amount": "30",
+        "sign": "absorbed",
+    }
+
+
 def test_express_refuses_an_unmapped_symbol_before_spending() -> None:
     """A symbol with no verified token address is refused, not guessed at.
 

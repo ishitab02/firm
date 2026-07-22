@@ -106,7 +106,8 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
         PROCURER_URL: await startFulfilmentStub(),
         FIRM_PAYTO_ADDRESS: "0xfirmtestpayto",
         FIRM_CHARGE_ASSET: "0x779ded0c9e1022225f8e0630b35a9b54be713736",
-        FIRM_CHARGE_NETWORK: "eip155:196"
+        FIRM_CHARGE_NETWORK: "eip155:196",
+        FIRM_RESOURCE_URL: "https://firm-gateway.fly.dev/"
         // X402_FACILITATOR_URL deliberately unset: an unverifiable payment must
         // be treated exactly like no payment.
       },
@@ -124,7 +125,7 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
 
   it("still serves the free quote tool", async () => {
     const { status, body } = await callTool("get_quote", {
-      goal: "market snapshot for BTC",
+      goal: "Compare BTC and ETH on 4h: market trend, support and resistance",
       budget_cap: { amount: "5000000", decimals: 6, token: "USDT" },
       constraints: {}
     });
@@ -132,9 +133,76 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
     expect(body.quote_id).toMatch(/^q_/);
   });
 
+  it("exposes Projects as its own 1-USDT x402 resource", async () => {
+    const response = await fetch(`${base}/projects`);
+    expect(response.status).toBe(402);
+    const body = await response.json() as any;
+    expect(body.error.code).toBe("PAYMENT_REQUIRED");
+
+    const header = response.headers.get("payment-required");
+    expect(header).toBeTruthy();
+    const requirements = JSON.parse(Buffer.from(header as string, "base64").toString("utf8"));
+    expect(requirements.accepts[0]).toMatchObject({
+      amount: "1000000",
+      asset: "0x779ded0c9e1022225f8e0630b35a9b54be713736",
+      network: "eip155:196"
+    });
+    expect(requirements.accepts[0].outputSchema.input).toMatchObject({
+      type: "http",
+      method: "POST",
+      body: { required: ["goal", "budget_cap"] }
+    });
+    expect(requirements.accepts[0].outputSchema.output).toMatchObject({
+      required: ["task_id", "state", "result_url"]
+    });
+    expect(requirements.resource.url).toBe("https://firm-gateway.fly.dev/projects");
+  });
+
+  it("answers the validator's empty Projects body with 402 before business validation", async () => {
+    const beforeQuotes = await db.query("SELECT count(*)::int AS n FROM firm_quotes");
+    const beforeJobs = await db.query("SELECT count(*)::int AS n FROM firm_jobs");
+    const response = await fetch(`${base}/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}"
+    });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(402);
+    expect(body.error.code).toBe("PAYMENT_REQUIRED");
+    const requirements = JSON.parse(
+      Buffer.from(response.headers.get("payment-required") as string, "base64").toString("utf8")
+    );
+    expect(requirements.accepts[0].amount).toBe("1000000");
+
+    const afterQuotes = await db.query("SELECT count(*)::int AS n FROM firm_quotes");
+    const afterJobs = await db.query("SELECT count(*)::int AS n FROM firm_jobs");
+    expect(afterQuotes.rows[0].n).toBe(beforeQuotes.rows[0].n);
+    expect(afterJobs.rows[0].n).toBe(beforeJobs.rows[0].n);
+  });
+
+  it("challenges a valid direct Project without persisting an unpaid quote or job", async () => {
+    const goal = "Compare BTC and ETH on 4h for unpaid Projects boundary proof";
+    const response = await fetch(`${base}/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        goal,
+        budget_cap: { amount: "5000000", decimals: 6, token: "USDT" },
+        constraints: {}
+      })
+    });
+    expect(response.status).toBe(402);
+
+    const quotes = await db.query("SELECT count(*)::int AS n FROM firm_quotes WHERE goal = $1", [goal]);
+    const jobs = await db.query("SELECT count(*)::int AS n FROM firm_jobs WHERE goal = $1", [goal]);
+    expect(quotes.rows[0].n).toBe(0);
+    expect(jobs.rows[0].n).toBe(0);
+  });
+
   it("answers an unpaid execute with 402 and writes no job row", async () => {
     const quote = await callTool("get_quote", {
-      goal: "market snapshot for BTC",
+      goal: "Compare BTC and ETH on 4h: market trend, support and resistance",
       budget_cap: { amount: "5000000", decimals: 6, token: "USDT" },
       constraints: {}
     });
@@ -153,6 +221,11 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
     const requirements = JSON.parse(Buffer.from(header as string, "base64").toString("utf8"));
     expect(requirements.accepts[0].amount).toBe(quote.body.price.amount);
     expect(requirements.accepts[0].payTo).toBe("0xfirmtestpayto");
+    expect(requirements.accepts[0].outputSchema.input).toMatchObject({
+      type: "http",
+      method: "POST",
+      body: { required: ["quote_id"] }
+    });
 
     const after = await db.query("SELECT count(*)::int AS n FROM firm_jobs WHERE quote_id = $1", [quoteId]);
     expect(after.rows[0].n).toBe(before.rows[0].n);
@@ -161,7 +234,7 @@ suite("gateway payment boundary (CHARGING_MODE=enforce)", () => {
 
   it("rejects a forged payment header just as hard as a missing one", async () => {
     const quote = await callTool("get_quote", {
-      goal: "market snapshot for ETH",
+      goal: "Analyse ETH on 1h and 4h: market trend, support and resistance",
       budget_cap: { amount: "5000000", decimals: 6, token: "USDT" },
       constraints: {}
     });
@@ -333,7 +406,8 @@ suite("gateway settlement boundary", () => {
         EXPRESS_ENABLED: "true",
         EXPRESS_JOB_TYPES: "market_snapshot",
         EXPRESS_PRICE_UNITS: "500000",
-        EXPRESS_TIMEOUT_MS: "5000"
+        EXPRESS_TIMEOUT_MS: "5000",
+        PROJECTS_TIMEOUT_MS: "5000"
       },
       stdio: "ignore"
     });
@@ -368,9 +442,120 @@ suite("gateway settlement boundary", () => {
     return { quoteId: quote.quote_id as string, status: response.status, headers: response.headers, body: await response.json() };
   }
 
+  async function runDirectProject(goal: string) {
+    paths = [];
+    const response = await fetch(`${settleBase}/projects`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "PAYMENT-SIGNATURE": Buffer.from(JSON.stringify({ authorization: "valid" })).toString("base64")
+      },
+      body: JSON.stringify({
+        goal,
+        budget_cap: { amount: "5000000", decimals: 6, token: "USDT" },
+        constraints: { min_vendor_score: 60 }
+      })
+    });
+    return { status: response.status, headers: response.headers, body: await response.json() as any };
+  }
+
+  async function waitForDirectProject(goal: string, state: string) {
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+      const rows = await settleDb.query(
+        "SELECT task_id, state FROM firm_jobs WHERE goal = $1 ORDER BY created_at DESC LIMIT 1",
+        [goal]
+      );
+      if (rows.rows[0]?.state === state) return rows.rows[0].task_id as string;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error(`direct Project never reached ${state}`);
+  }
+
+  async function markDirectProjectComplete(taskId: string) {
+    await settleDb.query(
+      `UPDATE firm_jobs
+       SET state = 'complete', deliverable = $2::jsonb, provenance = $3::jsonb, updated_at = now()
+       WHERE task_id = $1`,
+      [
+        taskId,
+        JSON.stringify({ result: { subtasks: [{ result: { symbol: "BTC" } }, { result: { symbol: "ETH" } }] } }),
+        JSON.stringify({ guarantee_status: "delivered", hires: [{ agent_id: "2023" }, { agent_id: "2023" }] })
+      ]
+    );
+  }
+
+  it("creates a direct Project durably, settles it, and returns the completed content inline", async () => {
+    settleBehaviour = "success";
+    const goal = `Compare BTC and ETH on 4h for direct Projects success ${Date.now()}`;
+    const pending = runDirectProject(goal);
+    const taskId = await waitForDirectProject(goal, "paid");
+    await markDirectProjectComplete(taskId);
+    const result = await pending;
+
+    expect(result.status).toBe(200);
+    expect(result.body.task_id).toBe(taskId);
+    expect(result.body.state).toBe("complete");
+    expect(result.body.deliverable.result.subtasks.map((subtask: any) => subtask.result.symbol)).toEqual(["BTC", "ETH"]);
+    expect(result.body.provenance.guarantee_status).toBe("delivered");
+    expect(result.body.result_url).toBe(`/projects/${taskId}`);
+    expect(paths).toEqual(["/verify", "/settle"]);
+    const settlement = JSON.parse(
+      Buffer.from(result.headers.get("payment-response") as string, "base64").toString("utf8")
+    );
+    expect(settlement.transaction).toBe("0xsettledtx");
+
+    const row = await settleDb.query(
+      "SELECT state, quote->>'buyer_address' AS buyer, params FROM firm_jobs WHERE task_id = $1",
+      [taskId]
+    );
+    expect(row.rows[0].state).toBe("complete");
+    expect(row.rows[0].buyer).toBe("0xbuyer");
+    expect(row.rows[0].params.project_requests.map((request: any) => request.symbol)).toEqual(["BTC", "ETH"]);
+  }, 10_000);
+
+  it("keeps a direct Project non-claimable when settlement fails", async () => {
+    settleBehaviour = "declined";
+    const goal = `Compare BTC and ETH on 4h for direct Projects failed settlement ${Date.now()}`;
+    const result = await runDirectProject(goal);
+
+    expect(result.status).toBe(402);
+    expect(result.body.error.code).toBe("PAYMENT_NOT_SETTLED");
+    expect(paths).toEqual(["/verify", "/settle"]);
+    const rows = await settleDb.query(
+      "SELECT state FROM firm_jobs WHERE goal = $1 ORDER BY created_at DESC LIMIT 1",
+      [goal]
+    );
+    expect(rows.rows[0].state).toBe("failed_not_charged");
+  });
+
+  it("rejects an authorized empty Projects body without settling or writing", async () => {
+    settleBehaviour = "success";
+    paths = [];
+    const beforeQuotes = await settleDb.query("SELECT count(*)::int AS n FROM firm_quotes");
+    const beforeJobs = await settleDb.query("SELECT count(*)::int AS n FROM firm_jobs");
+    const response = await fetch(`${settleBase}/projects`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "PAYMENT-SIGNATURE": Buffer.from(JSON.stringify({ authorization: "valid" })).toString("base64")
+      },
+      body: "{}"
+    });
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(400);
+    expect(body.error.code).toBe("INVALID_ARGS");
+    expect(paths).toEqual(["/verify"]);
+    const afterQuotes = await settleDb.query("SELECT count(*)::int AS n FROM firm_quotes");
+    const afterJobs = await settleDb.query("SELECT count(*)::int AS n FROM firm_jobs");
+    expect(afterQuotes.rows[0].n).toBe(beforeQuotes.rows[0].n);
+    expect(afterJobs.rows[0].n).toBe(beforeJobs.rows[0].n);
+  });
+
   it("settles before creating the job, and reports the settlement transaction", async () => {
     settleBehaviour = "success";
-    const result = await quoteThenExecute("settled market snapshot");
+    const result = await quoteThenExecute("Compare BTC and ETH on 4h: market trend, support and resistance");
 
     expect(result.status).toBe(200);
     expect(result.body.task_id).toMatch(/^t_/);
@@ -381,15 +566,18 @@ suite("gateway settlement boundary", () => {
     );
     expect(settlement.transaction).toBe("0xsettledtx");
 
-    const rows = await settleDb.query("SELECT quote->>'buyer_address' AS buyer FROM firm_jobs WHERE quote_id = $1", [
-      result.quoteId
-    ]);
+    const rows = await settleDb.query(
+      "SELECT quote->>'buyer_address' AS buyer, params FROM firm_jobs WHERE quote_id = $1",
+      [result.quoteId]
+    );
     expect(rows.rows[0].buyer).toBe("0xbuyer");
+    expect(rows.rows[0].params.project_requests).toHaveLength(2);
+    expect(rows.rows[0].params.project_requests.map((request: any) => request.symbol)).toEqual(["BTC", "ETH"]);
   });
 
   it("writes no job when the payment verifies but does not settle", async () => {
     settleBehaviour = "declined";
-    const result = await quoteThenExecute("unsettled market snapshot");
+    const result = await quoteThenExecute("Compare BTC and ETH on 4h: market trend, support and resistance");
 
     expect(result.status).toBe(402);
     expect(result.body.error.detail).toMatch(/did not settle/);
@@ -401,7 +589,7 @@ suite("gateway settlement boundary", () => {
 
   it("writes no job when settlement reports success without a transaction", async () => {
     settleBehaviour = "no_transaction";
-    const result = await quoteThenExecute("evidence-free market snapshot");
+    const result = await quoteThenExecute("Analyse ETH on 1h and 4h: market trend, support and resistance");
 
     expect(result.status).toBe(402);
     const rows = await settleDb.query("SELECT count(*)::int AS n FROM firm_jobs WHERE quote_id = $1", [result.quoteId]);

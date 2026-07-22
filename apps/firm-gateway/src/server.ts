@@ -17,14 +17,20 @@ import {
 import { ensureGatewayTables, pool } from "./db.js";
 import { mcpDispatch, TOOL_DEFINITIONS } from "./mcp.js";
 import {
-  directExpressCall,
   EXPRESS_HTTP_INPUT,
   expressInputFailure,
   expressJobTypes,
   normaliseExpressArgs
 } from "./express-args.js";
+import {
+  directHttpToolCall,
+  PROJECT_EXECUTE_HTTP_INPUT,
+  PROJECT_RUN_HTTP_INPUT,
+  PROJECT_RUN_HTTP_OUTPUT,
+  projectSpecFromGoal
+} from "./project-args.js";
 import { fulfilmentFailure, readFulfilmentMode } from "./fulfilment.js";
-import { quotePrice, estimatePlan, PricingMode } from "./pricing.js";
+import { quotePrice, PricingMode } from "./pricing.js";
 import { usdt, units } from "./money.js";
 
 /**
@@ -49,7 +55,11 @@ function chargingMode(): "enforce" | "bypass" {
 
 const quoteRequest = z.object({
   goal: z.string().min(1),
-  budget_cap: z.object({ amount: z.string(), decimals: z.number(), token: z.string().default("USDT") }),
+  budget_cap: z.object({
+    amount: z.string().regex(/^\d+$/),
+    decimals: z.literal(6),
+    token: z.literal("USDT").default("USDT")
+  }),
   constraints: z.object({
     deadline_minutes: z.number().default(60),
     min_vendor_score: z.number().default(60),
@@ -77,6 +87,11 @@ function expressPriceUnits(): string {
 /** How long express_run waits for the synchronous result before returning PENDING. */
 function expressTimeoutMs(): number {
   return Number(process.env.EXPRESS_TIMEOUT_MS ?? 60_000);
+}
+/** How long a direct Projects purchase waits for an inline terminal result. */
+function projectsTimeoutMs(): number {
+  const configured = Number(process.env.PROJECTS_TIMEOUT_MS ?? 90_000);
+  return Number.isFinite(configured) && configured >= 0 ? Math.min(configured, 110_000) : 90_000;
 }
 /** job_type -> vendor capability. Only the locked job types appear here. */
 const EXPRESS_CAPABILITY: Record<string, string> = { market_snapshot: "market_snapshot" };
@@ -122,6 +137,14 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type StoredQuote = { goal: string; quote: Record<string, any>; constraints?: Record<string, any> };
 
+type PreparedProject = {
+  request: z.infer<typeof quoteRequest>;
+  price: ReturnType<typeof usdt>;
+  plan: Array<{ subtask: string; capability: "market_snapshot"; max_amount: null }>;
+  projectRequests: Array<Record<string, unknown>>;
+  mode: PricingMode;
+};
+
 type DeferredCharge = {
   header: string;
   requirements: PaymentRequirements;
@@ -146,45 +169,73 @@ async function loadQuote(quoteId: string): Promise<StoredQuote | undefined> {
   return result.rows[0];
 }
 
+function prepareProject(
+  args: unknown,
+  mode: PricingMode = pricingMode()
+): PreparedProject | { error: Record<string, unknown> } {
+  const parsed = quoteRequest.safeParse(args);
+  if (!parsed.success) {
+    return {
+      error: {
+        code: "INVALID_ARGS",
+        detail: "goal and a base-unit, 6-decimal USDT budget_cap are required"
+      }
+    };
+  }
+  const project = projectSpecFromGoal(parsed.data.goal);
+  if (!project.ok) {
+    return { error: { code: "UNSUPPORTED_PROJECT_GOAL", detail: project.detail } };
+  }
+  const price = quotePrice(project.spec.plan.map(() => usdt(100_000)), mode);
+  if (units(price) > units(parsed.data.budget_cap)) {
+    return { error: { code: "CANNOT_QUOTE_WITHIN_BUDGET", minimum_viable: price } };
+  }
+  return {
+    request: parsed.data,
+    price,
+    plan: project.spec.plan,
+    projectRequests: project.spec.requests,
+    mode
+  };
+}
+
+async function persistProjectQuote(prepared: PreparedProject) {
+  const quote = {
+    quote_id: `q_${randomUUID().replaceAll("-", "").slice(0, 16)}`,
+    price: prepared.price,
+    plan_summary: prepared.plan,
+    valid_until: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    guarantee: "full refund if not delivered",
+    quoted_at: new Date().toISOString(),
+    pricing_mode: prepared.mode,
+    project_requests: prepared.projectRequests
+  };
+  await pool().query(
+    `INSERT INTO firm_quotes (quote_id, goal, quote, budget_cap, constraints, valid_until)
+     VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6)`,
+    [
+      quote.quote_id,
+      prepared.request.goal,
+      JSON.stringify(quote),
+      JSON.stringify(prepared.request.budget_cap),
+      JSON.stringify(prepared.request.constraints),
+      quote.valid_until
+    ]
+  );
+  return quote;
+}
+
 async function toolCall(
   name: string,
   args: any,
   preloadedQuote?: StoredQuote,
   buyerAddress?: string,
-  initialState: "paid" | "authorized" = "paid"
+  initialState: "paid" | "authorized" | "awaiting_settlement" = "paid"
 ) {
   if (name === "get_quote") {
-    const request = quoteRequest.parse(args);
-    const plan = estimatePlan(request.goal);
-    const estimates = plan.map((item) =>
-      item.capability === "market_snapshot" ? usdt(100_000) : usdt(300_000)
-    );
-    const price = quotePrice(estimates, pricingMode());
-    if (units(price) > units(request.budget_cap)) {
-      return { error: { code: "CANNOT_QUOTE_WITHIN_BUDGET", minimum_viable: price } };
-    }
-    const quote = {
-      quote_id: `q_${randomUUID().replaceAll("-", "").slice(0, 16)}`,
-      price,
-      plan_summary: plan,
-      valid_until: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-      guarantee: "full refund if not delivered",
-      quoted_at: new Date().toISOString(),
-      pricing_mode: pricingMode()
-    };
-    await pool().query(
-      `INSERT INTO firm_quotes (quote_id, goal, quote, budget_cap, constraints, valid_until)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6)`,
-      [
-        quote.quote_id,
-        request.goal,
-        JSON.stringify(quote),
-        JSON.stringify(request.budget_cap),
-        JSON.stringify(request.constraints),
-        quote.valid_until
-      ]
-    );
-    return quote;
+    const prepared = prepareProject(args);
+    if ("error" in prepared) return prepared;
+    return persistProjectQuote(prepared);
   }
 
   if (name === "execute") {
@@ -208,11 +259,19 @@ async function toolCall(
       constraints: stored.constraints ?? stored.quote.constraints,
       buyer_address: buyerAddress ?? stored.quote.buyer_address
     };
+    const projectRequests = Array.isArray(stored.quote.project_requests) ? stored.quote.project_requests : [];
     await pool().query(
       `INSERT INTO firm_jobs
-       (task_id, quote_id, state, goal, quote, progress, deliverable, provenance, refund)
-       VALUES ($1, $2, 'paid', $3, $4::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
-      [taskId, quoteId, stored.goal, JSON.stringify(jobQuote)]
+       (task_id, quote_id, state, goal, quote, params, progress, deliverable, provenance, refund)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, '[]'::jsonb, NULL, NULL, NULL)`,
+      [
+        taskId,
+        quoteId,
+        initialState,
+        stored.goal,
+        JSON.stringify(jobQuote),
+        JSON.stringify({ project_requests: projectRequests })
+      ]
     );
     return { task_id: taskId, state: "planning" };
   }
@@ -448,7 +507,8 @@ async function chargeGate(
     amount: charge.price.amount,
     decimals: Number(charge.price.decimals ?? 6),
     resource: `firm:${name}:${charge.quoteId}`,
-    headers
+    headers,
+    inputSchema: PROJECT_EXECUTE_HTTP_INPUT
   });
   return "status" in charged ? charged : { settled: charged.verified, quote: charge.quote };
 }
@@ -464,6 +524,8 @@ async function sellerCharge(opts: {
   decimals: number;
   resource: string;
   headers: Record<string, string | string[] | undefined>;
+  inputSchema?: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
 }): Promise<{ status: number; body: unknown; headers?: Record<string, string> } | { verified: SettleResult }> {
   let seller;
   try {
@@ -483,7 +545,9 @@ async function sellerCharge(opts: {
     payTo: seller.payTo,
     resource: opts.resource,
     description: `The Firm — ${opts.name}`,
-    resourceUrl: seller.resourceUrl
+    resourceUrl: seller.resourceUrl,
+    inputSchema: opts.inputSchema,
+    outputSchema: opts.outputSchema
   });
 
   const header = paymentHeaderFrom(opts.headers);
@@ -517,20 +581,16 @@ async function sellerCharge(opts: {
   return { verified: { ...settlement, payer } };
 }
 
-/**
- * Verify an Express authorization without redeeming it.
- *
- * Express fulfilment is zero-cost public market data, so it can safely run
- * before settlement. The gateway redeems only after the strict output contract
- * passes and never exposes an unsettled result. That makes wrong-topic output a
- * free failure for the buyer instead of a non-refundable paid call.
- */
+/** Verify an authorization without redeeming it. */
 async function sellerAuthorize(opts: {
   name: string;
   amount: string;
   decimals: number;
   resource: string;
   headers: Record<string, string | string[] | undefined>;
+  resourcePath?: string;
+  inputSchema?: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
 }): Promise<
   { status: number; body: unknown; headers?: Record<string, string> }
   | { authorized: DeferredCharge }
@@ -552,8 +612,12 @@ async function sellerAuthorize(opts: {
     payTo: seller.payTo,
     resource: opts.resource,
     description: `The Firm — ${opts.name}`,
-    resourceUrl: seller.resourceUrl,
-    inputSchema: EXPRESS_HTTP_INPUT
+    resourceUrl:
+      opts.resourcePath && seller.resourceUrl
+        ? new URL(opts.resourcePath, seller.resourceUrl).toString()
+        : seller.resourceUrl,
+    inputSchema: opts.inputSchema ?? EXPRESS_HTTP_INPUT,
+    outputSchema: opts.outputSchema
   });
   const header = paymentHeaderFrom(opts.headers);
   const requirePayment = (reason: string) => ({
@@ -578,6 +642,171 @@ async function sellerAuthorize(opts: {
   };
 }
 
+async function projectsReadinessFailure(): Promise<string | null> {
+  const procurerUrl = process.env.PROCURER_URL;
+  const liveMode = procurerUrl ? await readFulfilmentMode(procurerUrl) : null;
+  return fulfilmentFailure({ charging: true, mode: liveMode });
+}
+
+async function projectRunGate(
+  args: unknown,
+  headers: Record<string, string | string[] | undefined>
+): Promise<
+  | { status: number; body: unknown; headers?: Record<string, string> }
+  | { prepared: PreparedProject; authorized: DeferredCharge | null }
+> {
+  // The direct listed service is the fixed 1-USDT tier. MCP get_quote keeps
+  // supporting the configured pricing mode, but a public API listing cannot
+  // advertise one price and challenge for another.
+  // Challenge before parsing the business contract. Marketplace validators
+  // probe paid endpoints with `{}`; returning INVALID_ARGS first makes a real
+  // paid resource look non-x402. A valid authorization still settles only
+  // after the free precondition check below succeeds.
+  let authorized: DeferredCharge | null = null;
+  if (chargingMode() === "enforce") {
+    const readinessFailure = await projectsReadinessFailure();
+    if (readinessFailure) {
+      return {
+        status: 503,
+        body: { error: { code: "FULFILMENT_NOT_READY", detail: readinessFailure } }
+      };
+    }
+    const charged = await sellerAuthorize({
+      name: "Firm Projects",
+      amount: "1000000",
+      decimals: 6,
+      resource: "firm:projects:v1",
+      resourcePath: "/projects",
+      inputSchema: PROJECT_RUN_HTTP_INPUT,
+      outputSchema: PROJECT_RUN_HTTP_OUTPUT,
+      headers
+    });
+    if ("status" in charged) return charged;
+    authorized = charged.authorized;
+  }
+
+  const prepared = prepareProject(args, "TIERS");
+  if ("error" in prepared) {
+    const code = (prepared.error.code as string | undefined) ?? "INVALID_ARGS";
+    return { status: code === "UNSUPPORTED_PROJECT_GOAL" ? 422 : 400, body: prepared };
+  }
+  return { prepared, authorized };
+}
+
+async function startDirectProject(prepared: PreparedProject, authorized: DeferredCharge | null) {
+  // A verified authorization is enough authority to create the durable job,
+  // but not to let the worker spend. The non-claimable intermediate state
+  // closes the old settle-before-insert hole: settlement can only happen after
+  // a job exists, and the worker only sees it after settlement succeeds.
+  const quote = await persistProjectQuote(prepared);
+  const stored: StoredQuote = {
+    goal: prepared.request.goal,
+    quote,
+    constraints: prepared.request.constraints
+  };
+  const result = await toolCall(
+    "execute",
+    { quote_id: quote.quote_id },
+    stored,
+    authorized?.payer,
+    authorized ? "awaiting_settlement" : "paid"
+  );
+  const taskId = result && typeof result === "object" && typeof result.task_id === "string" ? result.task_id : null;
+  if (!taskId) throw new Error("Projects job was not durably created");
+
+  let settlement: SettleResult | null = null;
+  if (authorized) {
+    settlement = await settlePayment(authorized.header, authorized.requirements, {
+      facilitatorUrl: authorized.facilitatorUrl
+    });
+    if (!settlement.ok) {
+      await pool().query(
+        `UPDATE firm_jobs
+         SET state = 'failed_not_charged', updated_at = now()
+         WHERE task_id = $1 AND state = 'awaiting_settlement'`,
+        [taskId]
+      );
+      return {
+        status: 402,
+        headers: {
+          "content-type": "application/json",
+          "PAYMENT-REQUIRED": encodeRequirements(authorized.requirements)
+        },
+        body: {
+          error: {
+            code: "PAYMENT_NOT_SETTLED",
+            detail: `job was created but authorization did not settle; buyer was not charged: ${settlement.reason}`
+          },
+          ...authorized.requirements
+        }
+      };
+    }
+    await pool().query(
+      "UPDATE firm_jobs SET state = 'paid', updated_at = now() WHERE task_id = $1 AND state = 'awaiting_settlement'",
+      [taskId]
+    );
+  }
+
+  const responseHeaders: Record<string, string> = { "content-type": "application/json" };
+  if (settlement?.ok) responseHeaders["PAYMENT-RESPONSE"] = encodeSettlement(settlement);
+
+  // Most two-to-four-leg Projects finish inside the challenge's 120-second
+  // window. Return the purchased content inline when they do, because a generic
+  // marketplace buyer should not need to understand our queue to receive what
+  // it paid for. The stable result URL remains a free recovery path for a slow
+  // job or a response lost in transit.
+  const deadline = Date.now() + projectsTimeoutMs();
+  let outcome: Record<string, unknown> = { state: "pending" };
+  do {
+    const rows = await pool().query(
+      `SELECT state, deliverable, provenance, refund
+       FROM firm_jobs WHERE task_id = $1`,
+      [taskId]
+    );
+    const current = rows.rows[0];
+    if (current?.state === "complete" && current.deliverable && current.provenance) {
+      outcome = {
+        state: "complete",
+        deliverable: current.deliverable,
+        provenance: current.provenance
+      };
+      break;
+    }
+    if (current?.state === "failed_refunded") {
+      outcome = {
+        state: "failed_refunded",
+        error: {
+          code: "DELIVERY_FAILED_REFUNDED",
+          refund: current.refund,
+          provenance: current.provenance
+        }
+      };
+      break;
+    }
+    if (current?.state === "failed_not_charged") {
+      outcome = {
+        state: "failed_not_charged",
+        error: { code: "DELIVERY_FAILED_NOT_CHARGED" }
+      };
+      break;
+    }
+    if (Date.now() >= deadline) break;
+    await sleep(250);
+  } while (true);
+
+  return {
+    status: 200,
+    headers: responseHeaders,
+    body: {
+      quote_id: quote.quote_id,
+      ...result,
+      ...outcome,
+      result_url: `/projects/${taskId}`,
+      ...(chargingMode() === "bypass" ? { charging: "BYPASSED" } : {})
+    }
+  };
+}
+
 await ensureGatewayTables();
 
 const server = http.createServer(async (req, res) => {
@@ -591,6 +820,74 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+
+    const requestUrl = new URL(req.url ?? "/", "http://firm-gateway.local");
+
+    // Firm Projects has its own listed x402 resource. Keeping it off `/`
+    // prevents the 0.1-USDT Express challenge from shadowing the 1-USDT
+    // Projects service when marketplace validators probe the endpoint.
+    if (requestUrl.pathname === "/projects") {
+      if (req.method === "GET") {
+        if (chargingMode() === "enforce") {
+          const readinessFailure = await projectsReadinessFailure();
+          if (readinessFailure) {
+            send(res, 503, { error: { code: "FULFILMENT_NOT_READY", detail: readinessFailure } });
+            return;
+          }
+        }
+        const gate = await sellerAuthorize({
+          name: "Firm Projects",
+          amount: "1000000",
+          decimals: 6,
+          resource: "firm:projects:v1",
+          resourcePath: "/projects",
+          inputSchema: PROJECT_RUN_HTTP_INPUT,
+          outputSchema: PROJECT_RUN_HTTP_OUTPUT,
+          headers: req.headers
+        });
+        if ("status" in gate) {
+          res.writeHead(gate.status, { "content-type": "application/json", ...(gate.headers ?? {}) });
+          res.end(JSON.stringify(gate.body));
+          return;
+        }
+        send(res, 400, {
+          error: { code: "INVALID_ARGS", detail: "POST goal, budget_cap, and optional constraints to run a Project" }
+        });
+        return;
+      }
+      if (req.method !== "POST") {
+        send(res, 405, { error: { code: "METHOD_NOT_ALLOWED" } });
+        return;
+      }
+      const projectBody = await readJson(req);
+      if (projectBody === MALFORMED_BODY) {
+        send(res, 400, { error: { code: "INVALID_JSON", detail: "request body is not valid JSON" } });
+        return;
+      }
+      const gate = await projectRunGate(projectBody, req.headers);
+      if ("status" in gate) {
+        res.writeHead(gate.status, { "content-type": "application/json", ...(gate.headers ?? {}) });
+        res.end(JSON.stringify(gate.body));
+        return;
+      }
+      const started = await startDirectProject(gate.prepared, gate.authorized);
+      res.writeHead(started.status, started.headers);
+      res.end(JSON.stringify(started.body));
+      return;
+    }
+
+    if (req.method === "GET" && /^\/projects\/t_[a-zA-Z0-9]+$/.test(requestUrl.pathname)) {
+      const taskId = requestUrl.pathname.slice("/projects/".length);
+      const result = await toolCall("get_result", { task_id: taskId });
+      if (result?.error?.code === "NOT_READY_OR_NOT_FOUND") {
+        const status = await toolCall("get_status", { task_id: taskId });
+        send(res, 200, { task_id: taskId, ...status });
+        return;
+      }
+      send(res, 200, { task_id: taskId, ...result });
+      return;
+    }
+
     // An unpaid GET to a paid resource is a 402, not a 405. The review flagged
     // the 405 explicitly ("Return HTTP 402 (not 405/200) on unpaid requests"),
     // and answering with the challenge is also what lets a standard x402 buyer
@@ -635,7 +932,7 @@ const server = http.createServer(async (req, res) => {
     const unresolved =
       dispatch.kind === "error" ||
       (dispatch.kind === "tool" && !TOOL_DEFINITIONS.some((tool) => tool.name === dispatch.name));
-    const direct = unresolved ? directExpressCall(body) : null;
+    const direct = unresolved ? directHttpToolCall(body) : null;
 
     if (dispatch.kind === "error" && !direct) {
       res.writeHead(200, { "content-type": "application/json" });
@@ -648,8 +945,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const method = direct ? "express_run" : (dispatch as { name: string }).name;
-    const args = direct ?? (dispatch as { args: any }).args;
+    const method = direct ? direct.name : (dispatch as { name: string }).name;
+    const args = direct ? direct.args : (dispatch as { args: any }).args;
 
     const gate = await chargeGate(method, args, req.headers);
     if ("status" in gate) {

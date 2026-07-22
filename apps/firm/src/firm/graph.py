@@ -106,182 +106,184 @@ def sourcing_node(state: FirmGraphState) -> FirmGraphState:
 
 def vetting_node(state: FirmGraphState) -> FirmGraphState:
     task = state["task"]
-    state["store"].transition(task, JobState.VETTING, "trust filters applied")
+    strict_market_contract = task.quote.express or isinstance(task.params.get("project_requests"), list)
+    by_capability = state.get("candidates_by_capability", {})
+    vetted_by_capability: dict[str, list[VendorIndexEntry]] = {}
+    accepted_union: list[VendorIndexEntry] = []
+    seen: set[str] = set()
+
+    for capability, candidates in by_capability.items():
+        vetted: list[VendorIndexEntry] = []
+        for vendor in candidates:
+            matching = [service for service in vendor.services if service.capability == capability]
+            reason: str | None = None
+            if not matching:
+                reason = f"no service for required capability {capability}"
+            elif not all(
+                (service.endpoint or vendor.endpoint).startswith("https://")
+                or (service.endpoint or vendor.endpoint).startswith("http://mock.")
+                or (service.endpoint or vendor.endpoint).startswith("http://127.0.0.1")
+                or (service.endpoint or vendor.endpoint).startswith("http://localhost")
+                for service in matching
+            ):
+                reason = "service endpoint is not HTTPS"
+            elif strict_market_contract and capability == "market_snapshot" and not any(
+                vendor.agent_id == VENDOR_AGENT_ID and service.tool == VENDOR_SERVICE_NAME
+                for service in matching
+            ):
+                # The old category tag admitted ETF tables and unknown-schema
+                # kline APIs. Only this exact supplier contract has passed a
+                # paid end-to-end request with documented args and strict
+                # symbol/timeframe validation, so Projects must not spend on a
+                # merely similar listing and hope the validator refunds later.
+                reason = "market_snapshot contract has not passed paid supplier verification"
+
+            if reason is not None:
+                state.setdefault("rejected", []).append(
+                    VendorRejection(agent_id=vendor.agent_id, reason=reason)
+                )
+                continue
+            vetted.append(vendor)
+            if vendor.agent_id not in seen:
+                seen.add(vendor.agent_id)
+                accepted_union.append(vendor)
+        vetted_by_capability[capability] = vetted
+
+    state["candidates_by_capability"] = vetted_by_capability
+    state["vendors"] = accepted_union
+    state["store"].transition(
+        task,
+        JobState.VETTING,
+        f"vetted {len(accepted_union)} supplier(s) against trust, endpoint and contract checks",
+    )
     return state
 
 
-async def procuring_node(state: FirmGraphState) -> FirmGraphState:
+def _project_market_requests(task: FirmTask) -> dict[str, dict[str, Any]]:
+    raw = task.params.get("project_requests")
+    if not isinstance(raw, list):
+        return {}
+    requests: dict[str, dict[str, Any]] = {}
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("subtask"), str):
+            continue
+        requests[item["subtask"]] = item
+    return requests
+
+
+async def _procure_market_snapshot(
+    state: FirmGraphState,
+    subtask: Any,
+    candidates: list[VendorIndexEntry],
+    procurer: Procurer,
+    request: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Buy, derive and strictly validate one market-analysis leg.
+
+    Express calls this once. Projects calls it once per planned symbol/timeframe
+    leg and assembles the validated results only after every leg succeeds.
+    """
     task = state["task"]
     store = state["store"]
-    procurer = state.get("procurer") or SimulatedProcurer()
-    by_capability = state.get("candidates_by_capability", {})
-
-    store.transition(task, JobState.PROCURING, "starting vendor procurement")
-    subtask_results: list[dict[str, Any]] = []
-
-    # Express BUYS its market data from a marketplace agent and derives the
-    # promised fields from it. The endpoints tagged market_snapshot are mostly
-    # ETF-flow services that cannot serve symbol + timeframe + price action +
-    # trend + support/resistance, which is how a reviewer was billed twice for
-    # Bitcoin ETF holdings after asking about ETH.
-    #
-    # The alternative was to fetch OKX's own free public candle API and sell it
-    # at 0.1 USDT. That delivers the right answer and quietly removes the only
-    # thing that makes this a contractor rather than a proxy -- while reselling
-    # the host's free data back to them. So we hire instead: OKLink #2023 sells
-    # a real price series for 15 base units and documents its arguments, and the
-    # analysis on top is the part the buyer is actually paying for.
-    if task.quote.express:
-        if len(task.quote.plan_summary) != 1 or task.quote.plan_summary[0].capability != "market_snapshot":
-            state["error"] = "Express only supports the market_snapshot contract"
-            return state
-        subtask = task.quote.plan_summary[0]
-        vendor = next(
-            (candidate for candidate in state.get("vendors", []) if candidate.agent_id == VENDOR_AGENT_ID),
-            None,
+    vendor = next((candidate for candidate in candidates if candidate.agent_id == VENDOR_AGENT_ID), None)
+    service = next(
+        (
+            candidate_service
+            for candidate_service in (vendor.services if vendor else [])
+            if candidate_service.tool == VENDOR_SERVICE_NAME
+        ),
+        None,
+    )
+    if vendor is None or service is None:
+        state["error"] = (
+            f"verified supplier {VENDOR_AGENT_NAME} #{VENDOR_AGENT_ID} "
+            f"with service {VENDOR_SERVICE_NAME!r} is absent from the vetted vendor index"
         )
-        service = next(
-            (
-                candidate_service
-                for candidate_service in (vendor.services if vendor else [])
-                if candidate_service.tool == VENDOR_SERVICE_NAME
-            ),
-            None,
-        )
-        if vendor is None or service is None:
-            state["error"] = (
-                f"verified Express supplier {VENDOR_AGENT_NAME} #{VENDOR_AGENT_ID} "
-                f"with service {VENDOR_SERVICE_NAME!r} is absent from the vetted vendor index"
+        store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+        return None
+
+    endpoint = service.endpoint or vendor.endpoint
+    try:
+        symbol, timeframe, _prompt = normalise_market_request(request)
+        args = vendor_request(symbol, timeframe)
+    except MarketSnapshotError as error:
+        state["error"] = str(error)
+        store.transition(task, JobState.PROCURING, f"not purchasable: {error}", subtask.subtask)
+        return None
+
+    previous = next(
+        (
+            attempt
+            for attempt in task.attempts
+            if attempt.subtask == subtask.subtask and attempt.endpoint == endpoint
+        ),
+        None,
+    )
+    if previous is not None and previous.outcome == "fired":
+        state["error"] = previous.reason or "previous purchased series failed validation"
+        store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+        return None
+
+    if previous is None:
+        response = await procurer.pay_and_call(
+            PayAndCallRequest(
+                vendor_endpoint=endpoint,
+                tool=service.tool,
+                args=args,
+                max_amount=service.price,
+                task_id=task.task_id,
+                subtask_id=subtask.subtask,
             )
-            store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
-            return state
-        endpoint = service.endpoint or vendor.endpoint
-        try:
-            symbol, timeframe, _prompt = normalise_market_request(dict(task.params))
-            args = vendor_request(symbol, timeframe)
-        except MarketSnapshotError as error:
-            # Refused before spending: an unmapped symbol is our gap, not a
-            # vendor failure, and carries no performance penalty.
-            state["error"] = str(error)
-            store.transition(task, JobState.PROCURING, f"not purchasable: {error}", subtask.subtask)
-            return state
-
-        previous = next(
-            (
-                attempt
-                for attempt in task.attempts
-                if attempt.subtask == subtask.subtask and attempt.endpoint == endpoint
-            ),
-            None,
         )
-        if previous is not None and previous.outcome == "fired":
-            state["error"] = previous.reason or "previous purchased series failed validation"
-            store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
-            return state
+        if not response.ok or response.result is None or response.receipt is None:
+            code = response.error_code or "VENDOR_ERROR"
+            state["error"] = f"{VENDOR_AGENT_ID} could not supply price data ({code})"
+            if code in _NOT_VENDOR_FAULT:
+                state.setdefault("rejected", []).append(
+                    VendorRejection(
+                        agent_id=VENDOR_AGENT_ID,
+                        reason=f"not hired ({code}): {response.detail or 'no detail'}",
+                    )
+                )
+                store.transition(
+                    task,
+                    JobState.PROCURING,
+                    f"did not hire {VENDOR_AGENT_ID}: {code}; the Firm's own decision, not a vendor failure",
+                    subtask.subtask,
+                )
+            else:
+                state["performance"].record_timeout(VENDOR_AGENT_ID)
+                store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+            return None
+        vendor_result = response.result
+        vendor_cost = response.receipt.amount
+        vendor_tx = response.receipt.tx
+    else:
+        vendor_result = previous.result
+        vendor_cost = previous.cost
+        vendor_tx = previous.tx
 
+    try:
+        rows = _price_rows(vendor_result)
+        candles = candles_from_price_series(rows, timeframe)
+        snapshot = build_market_snapshot(
+            request,
+            candles,
+            source=f"OKLink {VENDOR_AGENT_NAME} #{VENDOR_AGENT_ID} (purchased)",
+            source_url=endpoint,
+            minimum_candles=8,
+            price_source_asset=price_source_asset(symbol),
+        )
+        snapshot["source_asset"] = {
+            "symbol": "WETH" if symbol == "ETH" else "WBTC",
+            "chain_index": args["chainIndex"],
+            "token_address": args["tokenAddress"],
+            "requested_symbol": symbol,
+        }
+    except MarketSnapshotError as error:
+        reason = f"purchased series unusable: {error}"
         if previous is None:
-            response = await procurer.pay_and_call(
-                PayAndCallRequest(
-                    vendor_endpoint=endpoint,
-                    tool=service.tool,
-                    args=args,
-                    # The regenerated index is the source of truth for what we
-                    # are willing to pay. A repriced challenge is refused before
-                    # signing instead of being hidden inside the margin.
-                    max_amount=service.price,
-                    task_id=task.task_id,
-                    subtask_id=subtask.subtask,
-                )
-            )
-            if not response.ok or response.result is None or response.receipt is None:
-                code = response.error_code or "VENDOR_ERROR"
-                state["error"] = f"{VENDOR_AGENT_ID} could not supply price data ({code})"
-                if code in _NOT_VENDOR_FAULT:
-                    store.transition(
-                        task,
-                        JobState.PROCURING,
-                        f"did not hire {VENDOR_AGENT_ID}: {code}; the Firm's own decision, not a vendor failure",
-                        subtask.subtask,
-                    )
-                else:
-                    state["performance"].record_timeout(VENDOR_AGENT_ID)
-                    store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
-                return state
-            vendor_result = response.result
-            vendor_cost = response.receipt.amount
-            vendor_tx = response.receipt.tx
-        else:
-            # Resume from the durable payment ledger. Never ask the procurer to
-            # pay again merely because the worker crashed after the first call.
-            vendor_result = previous.result
-            vendor_cost = previous.cost
-            vendor_tx = previous.tx
-
-        try:
-            rows = _price_rows(vendor_result)
-            candles = candles_from_price_series(rows, timeframe)
-            snapshot = build_market_snapshot(
-                dict(task.params),
-                candles,
-                source=f"OKLink {VENDOR_AGENT_NAME} #{VENDOR_AGENT_ID} (purchased)",
-                source_url=endpoint,
-                # The paid probe returned 50 hourly points. A 4h resample is
-                # therefore 13-14 buckets, not the 20 assumed by the old test.
-                minimum_candles=8,
-                price_source_asset=price_source_asset(symbol),
-            )
-            snapshot["source_asset"] = {
-                "symbol": "WETH" if symbol == "ETH" else "WBTC",
-                "chain_index": args["chainIndex"],
-                "token_address": args["tokenAddress"],
-                "requested_symbol": symbol,
-            }
-        except MarketSnapshotError as error:
-            reason = f"purchased series unusable: {error}"
-            if previous is None:
-                validation_receipt = {"passed": False, "checks": ["price_series"]}
-                task.attempts.append(
-                    ProcurementAttempt(
-                        agent_id=VENDOR_AGENT_ID,
-                        agent_name=VENDOR_AGENT_NAME,
-                        subtask=subtask.subtask,
-                        endpoint=endpoint,
-                        result=vendor_result,
-                        cost=vendor_cost,
-                        tx=vendor_tx,
-                        validation=validation_receipt,
-                        outcome="fired",
-                        reason=reason,
-                    )
-                )
-                state.setdefault("hires", []).append(
-                    HireReceipt(
-                        agent_id=VENDOR_AGENT_ID,
-                        name=VENDOR_AGENT_NAME,
-                        subtask=subtask.subtask,
-                        cost=vendor_cost,
-                        tx=vendor_tx,
-                        validation=validation_receipt,
-                    )
-                )
-                state.setdefault("fired", []).append(
-                    VendorFiring(
-                        agent_id=VENDOR_AGENT_ID,
-                        subtask=subtask.subtask,
-                        reason=reason,
-                        cost_absorbed=vendor_cost,
-                    )
-                )
-                store.save_task(task)
-            state["performance"].record_validation_failure(VENDOR_AGENT_ID)
-            state["error"] = reason
-            store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
-            return state
-
-        validation = validate(snapshot, {"acceptance": "market_snapshot", "request": dict(task.params)})
-        validation_receipt = {"passed": validation.passed, "checks": validation.checks_run}
-        reason = _validation_reason(validation) if not validation.passed else None
-        if previous is None:
+            validation_receipt = {"passed": False, "checks": ["price_series"]}
             task.attempts.append(
                 ProcurementAttempt(
                     agent_id=VENDOR_AGENT_ID,
@@ -292,7 +294,7 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
                     cost=vendor_cost,
                     tx=vendor_tx,
                     validation=validation_receipt,
-                    outcome="delivered" if validation.passed else "fired",
+                    outcome="fired",
                     reason=reason,
                 )
             )
@@ -306,52 +308,137 @@ async def procuring_node(state: FirmGraphState) -> FirmGraphState:
                     validation=validation_receipt,
                 )
             )
-            store.save_task(task)
-        if not validation.passed:
-            state["performance"].record_validation_failure(VENDOR_AGENT_ID)
-            if previous is None:
-                state.setdefault("fired", []).append(
-                    VendorFiring(
-                        agent_id=VENDOR_AGENT_ID,
-                        subtask=subtask.subtask,
-                        reason=reason or "validation failed",
-                        cost_absorbed=vendor_cost,
-                    )
+            state.setdefault("fired", []).append(
+                VendorFiring(
+                    agent_id=VENDOR_AGENT_ID,
+                    subtask=subtask.subtask,
+                    reason=reason,
+                    cost_absorbed=vendor_cost,
                 )
-            state["error"] = reason or "validation failed"
-            store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
-            return state
+            )
+            store.save_task(task)
+        state["performance"].record_validation_failure(VENDOR_AGENT_ID)
+        state["error"] = reason
+        store.transition(task, JobState.PROCURING, reason, subtask.subtask)
+        return None
 
-        state["performance"].record_success(VENDOR_AGENT_ID)
-        task.deliverable = snapshot
-        state["subtask_deliverables"] = [
-            {
-                "subtask": subtask.subtask,
-                "capability": subtask.capability,
-                "source": f"OKLink #{VENDOR_AGENT_ID} purchased price series, analysed by The Firm",
-                "result": snapshot,
-            }
-        ]
-        store.transition(
-            task,
-            JobState.PROCURING,
-            f"bought a {timeframe} price series from {VENDOR_AGENT_ID} and derived the snapshot",
-            subtask.subtask,
+    validation = validate(snapshot, {"acceptance": "market_snapshot", "request": request})
+    validation_receipt = {"passed": validation.passed, "checks": validation.checks_run}
+    reason = _validation_reason(validation) if not validation.passed else None
+    if previous is None:
+        task.attempts.append(
+            ProcurementAttempt(
+                agent_id=VENDOR_AGENT_ID,
+                agent_name=VENDOR_AGENT_NAME,
+                subtask=subtask.subtask,
+                endpoint=endpoint,
+                result=vendor_result,
+                cost=vendor_cost,
+                tx=vendor_tx,
+                validation=validation_receipt,
+                outcome="delivered" if validation.passed else "fired",
+                reason=reason,
+            )
         )
+        state.setdefault("hires", []).append(
+            HireReceipt(
+                agent_id=VENDOR_AGENT_ID,
+                name=VENDOR_AGENT_NAME,
+                subtask=subtask.subtask,
+                cost=vendor_cost,
+                tx=vendor_tx,
+                validation=validation_receipt,
+            )
+        )
+        store.save_task(task)
+    if not validation.passed:
+        state["performance"].record_validation_failure(VENDOR_AGENT_ID)
+        if previous is None:
+            state.setdefault("fired", []).append(
+                VendorFiring(
+                    agent_id=VENDOR_AGENT_ID,
+                    subtask=subtask.subtask,
+                    reason=reason or "validation failed",
+                    cost_absorbed=vendor_cost,
+                )
+            )
+        state["error"] = reason or "validation failed"
+        store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+        return None
+
+    state["performance"].record_success(VENDOR_AGENT_ID)
+    store.transition(
+        task,
+        JobState.PROCURING,
+        f"bought a {timeframe} price series from {VENDOR_AGENT_ID} and derived the snapshot",
+        subtask.subtask,
+    )
+    return {
+        "subtask": subtask.subtask,
+        "capability": subtask.capability,
+        "agent_id": VENDOR_AGENT_ID,
+        "source": f"OKLink #{VENDOR_AGENT_ID} purchased price series, analysed by The Firm",
+        "result": snapshot,
+    }
+
+
+async def procuring_node(state: FirmGraphState) -> FirmGraphState:
+    task = state["task"]
+    store = state["store"]
+    procurer = state.get("procurer") or SimulatedProcurer()
+    by_capability = state.get("candidates_by_capability", {})
+    project_requests = _project_market_requests(task)
+
+    store.transition(task, JobState.PROCURING, "starting vendor procurement")
+    subtask_results: list[dict[str, Any]] = []
+
+    if task.quote.express:
+        if len(task.quote.plan_summary) != 1 or task.quote.plan_summary[0].capability != "market_snapshot":
+            state["error"] = "Express only supports the market_snapshot contract"
+            return state
+        subtask = task.quote.plan_summary[0]
+        delivered = await _procure_market_snapshot(
+            state,
+            subtask,
+            by_capability.get(subtask.capability, []),
+            procurer,
+            dict(task.params),
+        )
+        if delivered is not None:
+            task.deliverable = delivered["result"]
+            state["subtask_deliverables"] = [delivered]
         return state
 
-    # Every subtask must be delivered. If any one exhausts its candidates the
-    # whole job fails and refunds — the Projects guarantee is all-or-nothing.
+    # Every Projects subtask must be delivered. Market legs use the verified
+    # adapter above; sending the project-level params verbatim to OKLink would
+    # buy a guaranteed 400 and was the reason Projects never completed live.
     for subtask in task.quote.plan_summary:
-        delivered = await _procure_subtask(state, subtask, by_capability.get(subtask.capability, []), procurer)
+        if subtask.capability == "market_snapshot" and project_requests:
+            request = project_requests.get(subtask.subtask)
+            if request is None:
+                state["error"] = f"no structured request for market subtask '{subtask.subtask}'"
+                store.transition(task, JobState.PROCURING, state["error"], subtask.subtask)
+                return state
+            delivered = await _procure_market_snapshot(
+                state,
+                subtask,
+                by_capability.get(subtask.capability, []),
+                procurer,
+                request,
+            )
+        else:
+            delivered = await _procure_subtask(
+                state,
+                subtask,
+                by_capability.get(subtask.capability, []),
+                procurer,
+            )
         if delivered is None:
             state["error"] = f"candidates exhausted for subtask '{subtask.subtask}'"
             return state
         subtask_results.append(delivered)
 
     state["subtask_deliverables"] = subtask_results
-    # A single-subtask job delivers the raw vendor result (unchanged); a
-    # multi-subtask job delivers each subtask's result under its own key.
     task.deliverable = (
         subtask_results[0]["result"] if len(subtask_results) == 1 else {"subtasks": subtask_results}
     )
@@ -724,7 +811,7 @@ def build_provenance(
         hires=state.get("hires", []),
         data_sources=(
             [f"OKLink {VENDOR_AGENT_NAME} #{VENDOR_AGENT_ID} purchased price series"]
-            if task.quote.express and state.get("hires")
+            if any(hire.agent_id == VENDOR_AGENT_ID for hire in state.get("hires", []))
             else []
         ),
         economics=Economics(

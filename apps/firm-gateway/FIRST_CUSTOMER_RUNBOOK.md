@@ -6,27 +6,14 @@ must use a genuine external buyer. Neither team wallet may buy the service.
 No step below authorizes a payment. The buyer must inspect and explicitly
 confirm the charge before signing through the **OKX Agent Payments Protocol**.
 
-## Stop gate: production is not ready yet
+## Production readiness gate
 
-As verified on 2026-07-21, the public gateway challenges for real payment while
-the private procurer reports:
+As verified on 2026-07-23, the public gateway charges only while the private
+procurer reports real payments, real refunds, a loaded wallet, and sufficient
+refund gas. Re-run the seller preflight immediately before any monitored buy;
+do not rely on this dated observation.
 
-```json
-{
-  "real_payments_enabled": false,
-  "real_refunds_enabled": false,
-  "wallet_key_present": false
-}
-```
-
-Do not invite a buyer while that is true. A buyer could pay real USD₮0 and
-receive simulated fulfilment, and a failed job could not close the advertised
-automatic-refund path.
-
-The gateway now refuses to start in charging mode unless the private procurer
-confirms all three conditions. Do not deploy that guard until the human owners
-are ready for the endpoint to stay unavailable unless the following preflight
-passes.
+The gateway refuses to start in charging mode unless those conditions hold.
 
 ## Seller preflight
 
@@ -73,7 +60,7 @@ Use the MCP request shape below. A bare body containing only `symbol`,
     "name": "express_run",
     "arguments": {
       "symbol": "BTC",
-      "timeframe": "24h",
+      "timeframe": "4h",
       "prompt": "Return a concise current BTC market snapshot."
     }
   }
@@ -81,7 +68,9 @@ Use the MCP request shape below. A bare body containing only `symbol`,
 ```
 
 The gateway normalizes those three documented inputs into the single locked
-`market_snapshot` job type. The paid replay must use the exact same body.
+`market_snapshot` job type. A bare body with the same three fields is also
+supported. The paid replay must use the exact same body shape used to obtain
+the challenge.
 
 ## Buyer flow
 
@@ -146,15 +135,7 @@ Capture all of the following before calling the proof complete:
 Never retain or publish the buyer's authorization header, private key, wallet
 session material, facilitator credentials, or Fly secrets.
 
-## Known recovery gaps
+## Known recovery gap
 
-- Settlement occurs before job insertion. A gateway crash between those steps
-  can leave a settled buyer without a job row.
 - The inbound settlement transaction is returned to the buyer but is not stored
   on the job; the buyer must preserve `PAYMENT-RESPONSE`.
-- If the procurer returns `REQUIRES_HUMAN` or another refund error, the worker's
-  current refund node assumes a `tx` exists and can fail before reaching a
-  terminal refunded state. This is an `apps/firm` owner fix; until it lands,
-  the funded manual-refund contingency above is mandatory.
-- Marketplace vendors accept heterogeneous parameters. This first run proves
-  one monitored input, not general market-snapshot compatibility.

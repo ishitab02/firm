@@ -52,6 +52,8 @@ export type ChargeSpec = {
   resourceUrl?: string;
   /** Bazaar-style replay contract included in the 402 challenge. */
   inputSchema?: Record<string, unknown>;
+  /** Buyer-visible response contract included in the 402 challenge. */
+  outputSchema?: Record<string, unknown>;
 };
 
 /**
@@ -235,7 +237,7 @@ export function buildRequirements(spec: ChargeSpec): PaymentRequirements {
         maxTimeoutSeconds: Number(process.env.CHARGE_TIMEOUT_SECONDS ?? 120),
         outputSchema: {
           input: spec.inputSchema ?? { type: "object" },
-          output: { type: "object" }
+          output: spec.outputSchema ?? { type: "object" }
         },
         extra: { decimals: spec.decimals }
       }

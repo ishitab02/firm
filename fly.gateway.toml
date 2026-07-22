@@ -24,6 +24,9 @@ primary_region = "sin"
   EXPRESS_JOB_TYPES = "market_snapshot"
   # 0.1 USDT
   EXPRESS_PRICE_UNITS = "100000"
+  # Direct Projects purchases return completed content inline when the worker
+  # finishes in this window; slower jobs return a free result_url.
+  PROJECTS_TIMEOUT_MS = "90000"
   # Published as the challenge's top-level `resource.url` — where a buyer replays
   # after paying. OKX's A2MCP guide requires it and every listed vendor we have
   # paid publishes it; we were the only one that did not. Deliberately NOT derived

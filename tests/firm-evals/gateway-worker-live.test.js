@@ -27,6 +27,46 @@ function post(tool, args) {
   return JSON.parse(result.stdout);
 }
 
+function postProject(args) {
+  const result = spawnSync(
+    "node",
+    [
+      "-e",
+      `
+      fetch(process.argv[2] + '/projects', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: process.argv[1]
+      }).then(async (res) => {
+        console.log(JSON.stringify({ status: res.status, body: await res.json() }));
+      }).catch((error) => { console.error(error); process.exit(1); });
+      `,
+      JSON.stringify(args),
+      gatewayUrl
+    ],
+    { encoding: "utf8" }
+  );
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+function getProject(taskId) {
+  const result = spawnSync(
+    "node",
+    [
+      "-e",
+      `fetch(process.argv[1] + '/projects/' + process.argv[2])
+        .then(async (res) => console.log(JSON.stringify({ status: res.status, body: await res.json() })))
+        .catch((error) => { console.error(error); process.exit(1); });`,
+      gatewayUrl,
+      taskId
+    ],
+    { encoding: "utf8" }
+  );
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
 function waitForGateway() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const result = spawnSync(
@@ -54,29 +94,32 @@ function runWorkerTaskDemo(taskId) {
   return JSON.parse(result.stdout);
 }
 
-test("gateway quote execute worker result path", { skip: !databaseUrl }, async () => {
+test("direct Projects gateway worker result path", { skip: !databaseUrl }, async () => {
   const gateway = spawn("./node_modules/.bin/tsx", ["src/server.ts"], {
     cwd: new URL("../../apps/firm-gateway", import.meta.url),
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl,
       PORT: String(gatewayPort),
-      PRICING_MODE: "QUOTED_AMOUNT"
+      PRICING_MODE: "QUOTED_AMOUNT",
+      PROJECTS_TIMEOUT_MS: "0"
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
 
   try {
     waitForGateway();
-    const quote = post("get_quote", {
-      goal: "Prepare a launch briefing",
+    const started = postProject({
+      goal: "Compare BTC and ETH on 4h: price action, market trend, support and resistance",
       budget_cap: { amount: "5000000", decimals: 6, token: "USDT" },
       constraints: { deadline_minutes: 60, min_vendor_score: 60, banned_categories: [] }
     });
-    assert.match(quote.quote_id, /^q_/);
-
-    const executed = post("execute", { quote_id: quote.quote_id });
+    assert.equal(started.status, 200);
+    assert.match(started.body.quote_id, /^q_/);
+    const executed = started.body;
     assert.match(executed.task_id, /^t_/);
+    assert.equal(executed.result_url, `/projects/${executed.task_id}`);
+    assert.equal(executed.charging, "BYPASSED");
 
     const worked = runWorkerTaskDemo(executed.task_id);
     assert.equal(worked.claimed, true);
@@ -89,6 +132,19 @@ test("gateway quote execute worker result path", { skip: !databaseUrl }, async (
     const result = post("get_result", { task_id: executed.task_id });
     assert.equal(result.provenance.guarantee_status, "delivered");
     assert.equal(result.provenance.economics.margin_retained_or_absorbed.sign, "retained");
+    assert.deepEqual(
+      result.deliverable.result.subtasks.map((subtask) => subtask.result.symbol),
+      ["BTC", "ETH"]
+    );
+    assert.deepEqual(result.provenance.hires.map((hire) => hire.agent_id), ["2023", "2023"]);
+
+    const publicResult = getProject(executed.task_id);
+    assert.equal(publicResult.status, 200);
+    assert.equal(publicResult.body.task_id, executed.task_id);
+    assert.deepEqual(
+      publicResult.body.deliverable.result.subtasks.map((subtask) => subtask.result.symbol),
+      ["BTC", "ETH"]
+    );
   } finally {
     gateway.kill("SIGTERM");
   }

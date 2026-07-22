@@ -1,6 +1,6 @@
 # The Firm
 
-**An autonomous prime contractor on OKX.AI.** You give it a goal and a budget. It quotes a fixed price, hires specialist agents from the marketplace, background-checks them before paying, validates their work after, fires and replaces the ones that fail, and returns one finished deliverable with a complete costed paper trail. If it cannot deliver, it refunds you.
+**An autonomous prime contractor on OKX.AI.** You give it a supported market-research goal and a budget. It quotes a fixed price, hires marketplace services, checks their exact contracts before paying, validates every result, and returns one finished deliverable with a complete costed paper trail. If it cannot deliver, it refunds you.
 
 Entry owner: **Ishita** (her hackathon submission, her AI core). Payments and infrastructure: **Poulav**. Deadline: **July 27, 23:59 UTC**.
 
@@ -10,8 +10,8 @@ OKX's founder says the future is one-person companies running agent workforces. 
 
 ## Status, stated plainly
 
-Live at **https://firm-gateway.fly.dev** — `onchainos agent x402-check` returns
-`valid: true` against it.
+Live at **https://firm-gateway.fly.dev**. Both the 0.1-USDT Express endpoint and
+the 1-USDT Projects endpoint at `/projects` return valid x402 challenges.
 
 **The whole paid path now works end to end. Zero external customers.**
 
@@ -42,7 +42,7 @@ traction, and they are never counted as any of those.
    Still **not** claimed as "Darwinian learning", but the gap has narrowed and it is worth being exact about where. Demonstrated on real paid jobs: the fallback loop firing and replacing five vendors inside a single job; a performance ledger with nine vendors carrying adjustments earned from paid outcomes (−30, −19, −10); and preflight health over 95 probed agents changing which vendors get hired at all — after that filter went in, a run that had been hiring dead endpoints first hired **zero**.
 
    What is still *not* demonstrated is the closing of the loop: a vendor's accumulated score demoting it on a later job in a way that measurably improves the outcome. Until that is observed, the true claim is "adaptive fallback with accumulated performance evidence", and that is what we say.
-3. **Two services, two price shapes.** "Firm Express": one fixed cheap price for single-vendor jobs, instant, repeatable (the Revenue Rocket hero). "Firm Projects": free quote, then execution at the quoted price (the flagship demo).
+3. **Two services, two honest scopes.** "Firm Express" is a 0.1-USDT single-symbol, single-timeframe snapshot. "Firm Projects" is a 1-USDT bundle of two to four BTC/ETH analysis legs across 1h, 2h, 4h, or 1d. Each Projects leg purchases a separate marketplace price series, validates symbol/timeframe/topic relevance, and is assembled only if every leg passes; otherwise the full buyer price is refunded. A one-leg request is refused with a pointer to Express, and an unsupported goal is refused before payment.
 
    Express is the smallest honest instance of the whole thesis. A buyer asks for an ETH 4h market snapshot and pays 0.1 USDT. The Firm buys the raw price series from **OKLink (Agent #2023)** for **15 base units** — a real third-party marketplace agent, paid over x402 — and derives the price action, trend, support and resistance itself. The receipt reads `100000 = 15 + 99985`.
 
@@ -68,7 +68,7 @@ traction, and they are never counted as any of those.
               buyer-side x402: pay-and-call, receipts,
               refunds, hard spend caps
                         |
-        real third-party ASPs (HatchAI, CoinAnk, ...)
+        verified third-party ASP contract (OKLink #2023 today)
                         |
         Treasury Copilot (Agent 5863, ours, live)
         books the spend: DISCLOSED intra-team payment

@@ -60,23 +60,24 @@ function runWorker(taskId, vendorIndexPath) {
   return JSON.parse(result.stdout);
 }
 
-test("gateway worker procurer local service path", { skip: !databaseUrl }, () => {
+test("gateway worker procurer invalid-result refund path", { skip: !databaseUrl }, () => {
   const vendorIndexPath = `/tmp/firm-vendor-index-${Date.now()}.json`;
   fs.writeFileSync(
     vendorIndexPath,
     JSON.stringify([
       {
-        agent_id: "local-procurer-good",
-        name: "Local Procurer Sim Vendor",
-        endpoint: "http://mock.vendor/local",
+        agent_id: "2023",
+        name: "Onchain Data Explorer",
+        endpoint: "https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history",
         services: [
           {
-            tool: "launch_brief",
-            capability: "token_launch",
-            price: { amount: "300000", decimals: 6, token: "USDT" }
+            tool: "Historical Token Price",
+            capability: "market_snapshot",
+            endpoint: "https://www.oklink.com/api/v5/explorer/mcp/x402/get_token_price_history",
+            price: { amount: "15", decimals: 6, token: "USDT" }
           }
         ],
-        kya_base_score: 90,
+        kya_base_score: 93,
         flags: [],
         last_verified_at: new Date().toISOString()
       }
@@ -98,17 +99,23 @@ test("gateway worker procurer local service path", { skip: !databaseUrl }, () =>
     waitFor(gatewayUrl);
     waitFor(`http://127.0.0.1:${procurerPort}`);
     const quote = postGateway("get_quote", {
-      goal: "Prepare a launch briefing",
+      goal: "Compare BTC and ETH on 4h: price action, market trend, support and resistance",
       budget_cap: { amount: "5000000", decimals: 6, token: "USDT" },
       constraints: { deadline_minutes: 60, min_vendor_score: 60, banned_categories: [] }
     });
     const execution = postGateway("execute", { quote_id: quote.quote_id });
     const worked = runWorker(execution.task_id, vendorIndexPath);
-    assert.equal(worked.state, "complete");
+    // The real procurer's simulation deliberately returns a generic fixture,
+    // not a forged OKLink price series. Strict Projects validation must reject
+    // that wrong shape and drive the all-or-nothing refund path.
+    assert.equal(worked.state, "failed_refunded");
 
     const result = postGateway("get_result", { task_id: execution.task_id });
-    assert.equal(result.provenance.guarantee_status, "delivered");
-    assert.match(result.provenance.hires[0].tx, /^SIMULATED:pay:/);
+    assert.equal(result.error.code, "REFUNDED");
+    assert.equal(result.error.provenance.guarantee_status, "refunded");
+    assert.equal(result.error.provenance.economics.actual_vendor_costs.amount, "15");
+    assert.match(result.error.provenance.hires[0].tx, /^SIMULATED:pay:/);
+    assert.match(result.error.refund.tx, /^SIMULATED:refund:/);
   } finally {
     gateway.kill("SIGTERM");
     procurer.kill("SIGTERM");

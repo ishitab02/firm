@@ -1,4 +1,5 @@
 import { Money, units, usdt } from "./money.js";
+import { projectSpecFromGoal } from "./project-args.js";
 
 export type PricingMode = "QUOTED_AMOUNT" | "TIERS";
 
@@ -6,17 +7,8 @@ const FIRM_FEE = 200_000;
 const TIERS = [1_000_000, 3_000_000, 5_000_000];
 
 export function estimatePlan(goal: string): Array<{ subtask: string; capability: string; max_amount: null }> {
-  const text = goal.toLowerCase();
-  if (text.includes("market") && text.includes("launch")) {
-    return [
-      { subtask: "market snapshot", capability: "market_snapshot", max_amount: null },
-      { subtask: "launch brief", capability: "token_launch", max_amount: null }
-    ];
-  }
-  if (text.includes("market")) {
-    return [{ subtask: "market snapshot", capability: "market_snapshot", max_amount: null }];
-  }
-  return [{ subtask: "launch brief", capability: "token_launch", max_amount: null }];
+  const parsed = projectSpecFromGoal(goal);
+  return parsed.ok ? parsed.spec.plan : [];
 }
 
 export function quotePrice(vendorEstimates: Money[], mode: PricingMode): Money {

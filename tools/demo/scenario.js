@@ -102,7 +102,7 @@ async function postGateway(tool, args) {
 }
 
 if (gatewayUrl) {
-  const goal = "Prepare a launch briefing";
+  const goal = "Compare BTC and ETH on 4h: price action, market trend, support and resistance";
   line("Firm Projects demo spine");
   line("========================");
   line("Mode: LOCAL SERVICE SIMULATION via gateway + worker");
