@@ -44,6 +44,10 @@ traction, and they are never counted as any of those.
    What is still *not* demonstrated is the closing of the loop: a vendor's accumulated score demoting it on a later job in a way that measurably improves the outcome. Until that is observed, the true claim is "adaptive fallback with accumulated performance evidence", and that is what we say.
 3. **Two services, two price shapes.** "Firm Express": one fixed cheap price for single-vendor jobs, instant, repeatable (the Revenue Rocket hero). "Firm Projects": free quote, then execution at the quoted price (the flagship demo).
 
+   Express is the smallest honest instance of the whole thesis. A buyer asks for an ETH 4h market snapshot and pays 0.1 USDT. The Firm buys the raw price series from **OKLink (Agent #2023)** for **15 base units** — a real third-party marketplace agent, paid over x402 — and derives the price action, trend, support and resistance itself. The receipt reads `100000 = 15 + 99985`.
+
+   What the buyer pays for is the analysis, not the data. That distinction is the product: the alternative was to fetch OKX's own free public candle endpoint and resell it at 0.1 USDT, which would deliver the same JSON while making this a proxy rather than a contractor — and would resell the host's free data back to them inside their own competition. Where a quoted asset has no direct feed, the source is disclosed: ETH is priced via WETH, and an unmapped symbol is refused **before** any money moves.
+
 ## Architecture
 
 ```
@@ -82,6 +86,8 @@ Locked decisions, do not relitigate:
 1. **No fabricated evidence, ever.** No fake vendor failures, no staged agents presented as marketplace agents, no invented tx hashes. If a demo segment is simulated, it is labeled SIMULATED on screen. The plan is to capture a real vendor failure during volume runs; marketplace agents are genuinely flaky.
 2. **Intra-team payments are disclosed.** The Firm paying Treasury for the closing statement appears in every provenance receipt as "books by our own Treasury Copilot" and is never counted as external revenue or traction.
 3. **No wash trading.** No scripted self-purchases, no routed volume. OKX audits for exactly this.
+
+   This extends to how a QA buyer is funded. A test purchase whose USDT came *from the Firm's own wallet* is circular — the Firm pays itself, and the only real movement is gas. It is a valid smoke test of the machinery and it is **not** a sale: it must never be counted as revenue, demand, or traction, and it must not be presented as a customer purchase. When a purchase needs to stand as evidence that someone bought something, the buyer is funded from an independently controlled human wallet.
 4. **The refund guarantee is honored.** If validation fails across all candidates, the quoted price is refunded in full, automatically.
 5. **Treasury (apps/treasury, Agent 5863) is live production.** Nobody edits it, its prices, or its listing without Poulav's explicit go.
 

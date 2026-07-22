@@ -200,26 +200,96 @@ onchainos agent service-list
 
 ---
 
-## Open, and it gates the paid path
+## 7. Redeploying: the order is not optional
 
-**`X402_FACILITATOR_URL` is unset, and its contract is unverified.**
+Updated 2026-07-22. **procurer -> worker -> gateway. The public surface comes up
+last, and only once everything behind it is ready.**
 
-The gateway verifies and settles payments against a facilitator. Route names
-(`/verify`, `/settle`) and body shapes are confirmed only against our own fake —
-never against the real OKX facilitator, which may use different routes, require
-authentication, or expect a different envelope.
+Treat a multi-service update as a maintenance window, not three independent
+deploys. While it is in progress the components are mutually incompatible, so
+**unlist or disable Express first** — a buyer arriving mid-window pays a live
+endpoint whose worker cannot serve it.
 
-With it unset the gateway fails closed: every paid call gets a 402 forever. That
-is the correct failure direction, and it also means:
+```bash
+# 0. Unlist Express so no purchase lands mid-window.
+fly deploy --config fly.procurer.toml --remote-only   # 1. money spine
+fly deploy --config fly.worker.toml   --remote-only   # 2. runs migrations
+fly deploy --config fly.gateway.toml  --remote-only   # 3. public surface last
+# 4. Re-list Express only after the verification below passes.
+```
 
-- `x402-check` should still pass, because it inspects the challenge
-- a real buyer paying would **not** get through
+Why this exact order:
 
-So: reconcile the facilitator contract before announcing the agent, and make the
-first paid call yourself before letting anyone else near it.
+- **Procurer first.** The gateway asks the procurer whether refunds are
+  operationally ready and *refuses to boot* when the answer is no
+  (`fulfilment.ts` — a startup check, deliberately). A procurer predating
+  `refundReadiness()` cannot answer, so a gateway deployed against it takes the
+  public endpoint down rather than degrading it.
+- **Worker second, because it carries the schema.** `fly.worker.toml` sets
+  `[deploy] release_command = "firm-worker migrate"`. Fly aborts the deploy if
+  that exits non-zero, so the migration is the gate on the new worker starting.
+  Running it before the gateway means the public endpoint never accepts a
+  payment against a database the new code cannot use.
+- **Gateway last.** It is the only thing with a public address. Nothing it
+  accepts is serviceable until the two above are in place.
 
-Related open item: the payer wallet `0xc029…` is not the CLI-logged-in account,
-so `REAL_REFUNDS_ENABLED` stays off until that is resolved. While real payments
-are on and real refunds are off, `/refund` deliberately fails closed with
-`REQUIRES_HUMAN` and hands back the exact command to run by hand — it will not
-fabricate a refund transaction.
+Verify before re-listing — health, then unpaid behaviour, then the validators:
+
+```bash
+fly ssh console -a firm-worker -C "python -c \"import httpx;print(httpx.get('http://firm-procurer.internal:8787/health').json())\""
+# require: refund_ready true, real_payments_enabled true, real_refunds_enabled true,
+#          wallet_key_present true, and refund_gas_balance_wei > refund_gas_required_wei
+
+curl -si https://firm-gateway.fly.dev            # GET  -> 402
+curl -si -X POST https://firm-gateway.fly.dev -H 'content-type: application/json' \
+  -d '{"symbol":"ETH","timeframe":"4h","prompt":"market snapshot with support and resistance"}'
+# POST with the documented flat body -> 402, and the decoded challenge must carry
+# the USD₮0 asset, eip155:196, and the POST input schema.
+
+onchainos agent x402-check --endpoint https://firm-gateway.fly.dev --body '…'
+onchainos agent x402-validate
+```
+
+Checking the deployed version is not optional — the procurer is the easy one to
+miss because it has no public health URL to look wrong:
+
+```bash
+git log -1 --format='%h %ad' --date=iso -- packages/procurer fly.procurer.toml
+fly status -a firm-procurer | grep 'LAST UPDATED' -A3
+```
+
+A commit timestamp newer than the machine's last update means that service is
+behind, whatever the app-level "latest deploy" column says.
+
+### The native-gas dependency
+
+Refunds are now transactions the Firm broadcasts, not authorizations someone
+else redeems, so `0xC029…50e0` **must hold native OKB**. It is checked before
+every transfer and again at gateway boot. Out of gas means the gateway will not
+start — deliberately, because the alternative is advertising a refund guarantee
+the wallet cannot honour.
+
+```bash
+cast balance 0xC0296012Cfbb0e6DF5dA7158B65Dbc46DD9650e0 --rpc-url https://rpc.xlayer.tech
+```
+
+Budget `REFUND_GAS_LIMIT` (100,000) × gas price per refund. Top up well above
+one refund's worth; the floor is not the target.
+
+## Resolved (kept for history)
+
+Two items gated the paid path and no longer do:
+
+- **The facilitator contract is verified.** `X402_FACILITATOR_URL` is set and
+  both legs were reconciled against the real OKX facilitator on 2026-07-22. It
+  wants `{x402Version, paymentPayload, paymentRequirements}` with the payload as
+  a decoded **object**; the gateway had been sending `{paymentHeader: <base64>}`
+  and getting `30001`. Responses are wrapped as `{code, data:{isValid…}}`, and
+  reading `raw.isValid` scored valid payments invalid. Both fixed and pinned by
+  tests.
+- **Real refunds are armed.** The payer wallet is no longer the CLI-logged-in
+  account: signing moved in-process, collapsing payer, payee and refunder onto
+  `0xC029…50e0`, and `REAL_REFUNDS_ENABLED=true`. `REFUND_FROM_ADDRESS` is
+  checked against the address the key derives to before every transfer, so a
+  wrong key deployed to production is a startup mismatch rather than a refund
+  from an unintended wallet.
