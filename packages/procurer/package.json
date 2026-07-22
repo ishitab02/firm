@@ -8,10 +8,13 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "vet": "tsx src/vet-cli.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify-signing": "tsx scripts/verify-signing.ts",
+    "diff-signers": "tsx scripts/diff-signers.ts"
   },
   "dependencies": {
     "pg": "^8.13.1",
+    "viem": "^2.55.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {

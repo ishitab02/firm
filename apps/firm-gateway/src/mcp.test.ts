@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { mcpDispatch, TOOL_DEFINITIONS } from "./mcp.js";
-import { normaliseExpressArgs } from "./express-args.js";
+import { directExpressCall, isJsonRpcRequest, normaliseExpressArgs } from "./express-args.js";
 
 describe("mcpDispatch", () => {
   it("answers initialize with serverInfo and echoes the client's protocol version", () => {
@@ -93,5 +93,50 @@ describe("express argument normalisation", () => {
       if (previous === undefined) delete process.env.EXPRESS_JOB_TYPES;
       else process.env.EXPRESS_JOB_TYPES = previous;
     }
+  });
+});
+
+/**
+ * The shapes OKX's reviewer actually sent, from the #7138 rejection:
+ *
+ *   "GET returns HTTP 405, POST-with-body returns HTTP 200, and it never issues
+ *    an HTTP 402 challenge with an 'accepts' payment-requirements array."
+ *   "Ensure POST to / with symbol/timeframe/prompt triggers the 402 payment
+ *    challenge"
+ *
+ * The listing documents symbol/timeframe/prompt, so that is the request the
+ * endpoint must answer — with a price, not a protocol error.
+ */
+describe("the buyer request the marketplace listing documents", () => {
+  it("treats the documented flat body as an Express purchase", () => {
+    const call = directExpressCall({ symbol: "BTC", timeframe: "1h", prompt: "market snapshot" });
+    expect(call).not.toBeNull();
+    expect(call!.job_type).toBe("market_snapshot");
+    expect(call!.params).toMatchObject({ symbol: "BTC", timeframe: "1h", prompt: "market snapshot" });
+  });
+
+  // A real MCP client always sends these; the protocol path must be untouched.
+  it("leaves genuine JSON-RPC alone", () => {
+    expect(isJsonRpcRequest({ jsonrpc: "2.0", method: "tools/list", id: 1 })).toBe(true);
+    expect(directExpressCall({ jsonrpc: "2.0", method: "tools/call", id: 1, params: {} })).toBeNull();
+    expect(directExpressCall({ method: "tools/list" })).toBeNull();
+  });
+
+  it("recognises a bare body as not-JSON-RPC", () => {
+    expect(isJsonRpcRequest({ symbol: "BTC" })).toBe(false);
+    expect(isJsonRpcRequest(null)).toBe(false);
+    expect(isJsonRpcRequest([1, 2])).toBe(false);
+  });
+
+  it("ignores non-object bodies rather than inventing a purchase", () => {
+    for (const bad of [null, [1, 2], "string" as unknown]) {
+      expect(directExpressCall(bad)).toBeNull();
+    }
+  });
+
+  // Answering an unrecognised bag with a price is safe: no work runs and no
+  // money moves until a valid payment arrives. Silence is what got us rejected.
+  it("still quotes a price for an unfamiliar field set", () => {
+    expect(directExpressCall({ ticker: "ETH" })).not.toBeNull();
   });
 });

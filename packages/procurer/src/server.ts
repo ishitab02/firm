@@ -18,7 +18,7 @@ import {
 } from "./db.js";
 import { units } from "./money.js";
 import { executeRefund, realRefundsEnabled, refundMode } from "./refund.js";
-import { realSigner } from "./signer.js";
+import { localSigner } from "./local-signer.js";
 import { payAndCallVendor } from "./vendor.js";
 import { vetVendors } from "./vet.js";
 
@@ -178,7 +178,10 @@ async function handlePayAndCall(body: unknown) {
     outcome = await payAndCallVendor(
       { vendorEndpoint: request.vendor_endpoint, tool: request.tool, args: request.args },
       {
-        signer: realSigner(),
+        // Signs in-process. The nonce is derived from the idempotency key, so a
+        // re-sign of this subtask reproduces the same authorization and the
+        // token's single-use nonce enforces at-most-once payment on-chain.
+        signer: localSigner({ nonceSeed: idempotencyKey }),
         allowedAssets: allowedAssets(),
         allowedNetworks: allowedNetworks(),
         // Real money is moving, so the asset's scale must be known before we
@@ -269,8 +272,8 @@ async function handleRefund(body: unknown) {
         `real payments are enabled but real refunds are not, so this refund was NOT sent. ` +
         `Owed: ${request.amount.amount} base units of ${request.amount.token} to ${request.to_address} ` +
         `for task ${request.task_id}. Send it manually, then set REAL_REFUNDS_ENABLED=true to close this path: ` +
-        `onchainos wallet send --recipient ${request.to_address} --amt ${amountUnits} ` +
-        `--chain $REFUND_CHAIN --contract-token $REFUND_TOKEN_CONTRACT --force`
+        `cast send $REFUND_TOKEN_CONTRACT "transfer(address,uint256)" ${request.to_address} ${amountUnits} ` +
+        `--rpc-url $X402_RPC_URL --private-key $FIRM_WALLET_KEY`
     };
     await releaseRefund(request.task_id, response);
     return response;

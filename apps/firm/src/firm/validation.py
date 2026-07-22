@@ -39,6 +39,20 @@ def _vendor_error(deliverable: dict[str, Any]) -> str | None:
     This is the honest replacement for asserting our fixtures' key names. We
     cannot know an arbitrary vendor's success schema, but we CAN recognise the
     conventional ways one reports failure inside an HTTP 200.
+
+    An explicit error field is trusted unconditionally. A *status code* is not,
+    and that distinction cost us a real delivery: CoinAnk #2013 returned a full
+    BTC-ETF snapshot -- issuer, NAV, holdings, net inflows -- under ``code: "1"``,
+    which is its success convention and not in our success set. We fired it,
+    recorded a failure against it, and refunded a customer whose work had in fact
+    arrived.
+
+    That is the same mistake this module already fixed once for schema keys: we
+    asserted our own convention, and every vendor that did not share it was
+    condemned. A status code we do not recognise, sitting on top of substantive
+    content, is far more likely to be an unfamiliar convention than a failure --
+    a genuine error response carries a message and no payload. So the status
+    check now only condemns a response that is *also* empty.
     """
     for key in _ERROR_KEYS:
         value = deliverable.get(key)
@@ -46,14 +60,20 @@ def _vendor_error(deliverable: dict[str, Any]) -> str | None:
             continue
         return f"vendor reported {key}: {str(value)[:120]}"
 
+    # Substantive content present => an unrecognised status code is not proof of
+    # failure. The non-empty and semantic-sanity checks in validate() still apply,
+    # so an empty or nonsense payload is caught there rather than waved through.
+    has_content = len(_payload_text(deliverable)) >= _MIN_MEANINGFUL_CHARS
+
     for key in _STATUS_KEYS:
         if key not in deliverable:
             continue
         raw = deliverable[key]
         if isinstance(raw, bool):
+            # An explicit boolean false is unambiguous in any convention.
             return None if raw else f"vendor reported {key}: false"
         text = str(raw).strip().lower()
-        if text and text not in _SUCCESS_CODES:
+        if text and text not in _SUCCESS_CODES and not has_content:
             return f"vendor reported {key}: {raw}"
     return None
 

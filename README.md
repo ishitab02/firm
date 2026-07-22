@@ -13,26 +13,35 @@ OKX's founder says the future is one-person companies running agent workforces. 
 Live at **https://firm-gateway.fly.dev** — `onchainos agent x402-check` returns
 `valid: true` against it.
 
-**Two real third-party procurement transactions. Zero customer revenue so far.**
+**The whole paid path now works end to end. Zero external customers.**
 
-Those two payments are real money to a real marketplace agent on X Layer, and
-they prove the buyer path works end to end. They are outbound *costs*, not
-revenue, and nobody has yet bought anything from The Firm. Anywhere those
-numbers appear, they appear with that sentence attached.
+Both halves matter. A buyer can pay The Firm, the payment settles on X Layer, a
+worker sources and hires real marketplace agents, a deliverable comes back
+inline, and the margin reconciles against chain state. When it cannot deliver,
+it refunds automatically — that has happened, on real money, unprompted.
+
+Every purchase so far was **our own QA transaction from our own wallet,
+disclosed as such**. Nobody outside this team has bought anything. Those runs are
+evidence that the machine works; they are not revenue, not demand, and not
+traction, and they are never counted as any of those.
 
 | proven | not yet proven |
 |---|---|
-| Public endpoint passes OKX's own x402 validator | A customer can successfully pay |
-| The Firm pays real third-party agents; idempotency holds under retry | Demand, or sustainable unit economics |
-| Facilitator auth works; a forged payment is rejected by OKX | A valid authorization settling end to end |
-| 95 agents probed: a measurable reliability problem exists | Long-term moat, or outcome quality at scale |
+| Public endpoint passes OKX's own x402 validator, on both the documented and MCP request shapes | Demand: no external customer has bought |
+| A customer payment verifies, settles, and returns a deliverable (`t_c6aaf880…`, ~12s) | Sustainable unit economics at any volume |
+| The refund guarantee fires automatically on failure, absorbing vendor cost | Outcome quality at scale |
+| The Firm pays real third-party agents; idempotency holds under retry, enforced on-chain by a derived EIP-3009 nonce | A moat |
+| Provenance reconciles: `user_price = vendor_costs + books + margin` | Multi-subtask jobs against real vendors |
+| 95 agents probed: a measurable reliability problem exists, and it predicted our own run |  |
 
 ## Why this version wins (the three upgrades over a generic orchestrator)
 
 1. **Fixed quote, guarantee premium.** The Firm quotes a fixed price up front and bears execution risk. When a hired agent fails and a replacement is hired, the overrun comes out of The Firm's margin, not the user's price. The margin is not markup: it buys vetting, validation, retries, and a guaranteed outcome. Total failure = full refund.
 2. **Adaptive fallback, on measured evidence.** The Firm does not trust its hires. It background-checks every candidate before paying — a free 402 probe that reads what the vendor will *actually* charge, not what it advertises. Deliverables then pass a validation stack; failures are recorded, the vendor's score drops, and the next candidate is hired automatically. The user never sees the hiccup.
 
-   This is deliberately **not** claimed as "Darwinian learning". The full loop — a vendor ranks high, fails a paid job, drops, and ranks lower on a later job that then performs better — has not yet been demonstrated across enough real outcomes to assert. What exists today is preflight intelligence over 95 probed agents plus accumulated performance evidence, which is a smaller and true claim.
+   Still **not** claimed as "Darwinian learning", but the gap has narrowed and it is worth being exact about where. Demonstrated on real paid jobs: the fallback loop firing and replacing five vendors inside a single job; a performance ledger with nine vendors carrying adjustments earned from paid outcomes (−30, −19, −10); and preflight health over 95 probed agents changing which vendors get hired at all — after that filter went in, a run that had been hiring dead endpoints first hired **zero**.
+
+   What is still *not* demonstrated is the closing of the loop: a vendor's accumulated score demoting it on a later job in a way that measurably improves the outcome. Until that is observed, the true claim is "adaptive fallback with accumulated performance evidence", and that is what we say.
 3. **Two services, two price shapes.** "Firm Express": one fixed cheap price for single-vendor jobs, instant, repeatable (the Revenue Rocket hero). "Firm Projects": free quote, then execution at the quoted price (the flagship demo).
 
 ## Architecture

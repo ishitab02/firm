@@ -3,7 +3,7 @@ import { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { payAndCallVendor, toolUrl } from "./vendor.js";
-import { Signer } from "./signer.js";
+import { Signer } from "./x402.js";
 
 const b64 = (value: unknown) => Buffer.from(JSON.stringify(value), "utf8").toString("base64");
 

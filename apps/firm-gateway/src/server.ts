@@ -14,8 +14,8 @@ import {
   verifyPayment
 } from "./charging.js";
 import { ensureGatewayTables, pool } from "./db.js";
-import { mcpDispatch } from "./mcp.js";
-import { expressJobTypes, normaliseExpressArgs } from "./express-args.js";
+import { mcpDispatch, TOOL_DEFINITIONS } from "./mcp.js";
+import { directExpressCall, expressJobTypes, normaliseExpressArgs } from "./express-args.js";
 import { fulfilmentFailure, readFulfilmentMode } from "./fulfilment.js";
 import { quotePrice, estimatePlan, PricingMode } from "./pricing.js";
 import { usdt, units } from "./money.js";
@@ -456,6 +456,21 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+    // An unpaid GET to a paid resource is a 402, not a 405. The review flagged
+    // the 405 explicitly ("Return HTTP 402 (not 405/200) on unpaid requests"),
+    // and answering with the challenge is also what lets a standard x402 buyer
+    // — which probes with GET before it ever POSTs — discover the price at all.
+    if (req.method === "GET") {
+      const gate = await chargeGate("express_run", {}, req.headers);
+      if ("status" in gate) {
+        res.writeHead(gate.status, { "content-type": "application/json", ...(gate.headers ?? {}) });
+        res.end(JSON.stringify(gate.body));
+        return;
+      }
+      // A GET carries no job parameters, so a *paid* GET still cannot be run.
+      send(res, 400, { error: { code: "INVALID_ARGS", detail: "send the job parameters in a POST body" } });
+      return;
+    }
     if (req.method !== "POST") {
       send(res, 405, { error: { code: "METHOD_NOT_ALLOWED" } });
       return;
@@ -468,7 +483,22 @@ const server = http.createServer(async (req, res) => {
       res.end();
       return;
     }
-    if (dispatch.kind === "error") {
+    // A buyer following the marketplace listing POSTs {symbol, timeframe, prompt}
+    // with no JSON-RPC envelope. That is the documented request, not a protocol
+    // error, and answering it with HTTP 200 is what got this endpoint rejected.
+    // Route it as express_run so it reaches the 402 like any other paid call.
+    //
+    // Note the dispatch shape: a body with no `method` does NOT come back as an
+    // error — mcpDispatch reads it as the legacy `{tool, args}` REST form and
+    // returns a tool call with an undefined name, which fell through to
+    // UNKNOWN_TOOL at HTTP 200. So the trigger is "no tool we recognise",
+    // not "the dispatcher errored".
+    const unresolved =
+      dispatch.kind === "error" ||
+      (dispatch.kind === "tool" && !TOOL_DEFINITIONS.some((tool) => tool.name === dispatch.name));
+    const direct = unresolved ? directExpressCall(body) : null;
+
+    if (dispatch.kind === "error" && !direct) {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id ?? null, error: { code: dispatch.code, message: dispatch.message } }));
       return;
@@ -479,8 +509,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const method = dispatch.name;
-    const args = dispatch.args;
+    const method = direct ? "express_run" : (dispatch as { name: string }).name;
+    const args = direct ?? (dispatch as { args: any }).args;
 
     const gate = await chargeGate(method, args, req.headers);
     if ("status" in gate) {

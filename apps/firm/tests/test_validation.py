@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from firm.validation import validate
+from firm.validation import validate, _vendor_error
 
 
 def test_validation_flags_malformed_source_urls() -> None:
@@ -142,3 +142,49 @@ def test_our_own_fixture_shape_still_passes_unchanged():
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     assert validate(mock, {"acceptance": "market_snapshot"}).passed
+
+
+def test_unrecognised_status_code_with_real_content_is_not_a_failure():
+    """CoinAnk #2013 returns a full BTC-ETF snapshot under ``code: "1"``.
+
+    That is its success convention, not an error. Condemning it fired a vendor
+    that had delivered, recorded a failure against it, and refunded a customer
+    whose work had arrived -- the same class of mistake this module already
+    fixed for schema keys.
+    """
+    coinank = {
+        "code": "1",
+        "data": [
+            {
+                "ticker": "IBIT",
+                "issuer": "BlackRock",
+                "etfName": "iShares Bitcoin Trust",
+                "price": 37.67,
+                "netInflow": 163892400,
+                "totalNav": 56219587998.64,
+            }
+        ],
+    }
+    assert _vendor_error(coinank) is None
+
+
+def test_unrecognised_status_code_with_no_content_still_fails():
+    """The guard must keep working where it actually matters: an empty body."""
+    assert _vendor_error({"code": "1"}) is not None
+    assert _vendor_error({"code": "500", "data": []}) is not None
+
+
+def test_explicit_error_field_still_condemns_even_with_content():
+    """An error field is unambiguous in any convention; content cannot excuse it."""
+    body = {"error": "rate limited", "data": [{"ticker": "IBIT", "price": 37.67}]}
+    assert _vendor_error(body) is not None
+
+
+def test_boolean_false_status_still_fails_regardless_of_content():
+    body = {"success": False, "data": [{"ticker": "IBIT", "price": 37.67}]}
+    assert _vendor_error(body) is not None
+
+
+def test_recognised_success_codes_still_pass():
+    for code in ("0", "200", "ok", "success"):
+        assert _vendor_error({"code": code, "data": [{"x": "yyyyyyyyyyyy"}]}) is None

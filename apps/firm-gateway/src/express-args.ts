@@ -20,6 +20,41 @@
  * which binds a port at import time.
  */
 
+/**
+ * Is this an MCP/JSON-RPC request, or a buyer POSTing the listing's fields raw?
+ *
+ * The marketplace listing documents Firm Express as taking `symbol`, `timeframe`
+ * and `prompt`. A buyer — including OKX's own reviewer — POSTs exactly that to
+ * the listed endpoint, with no JSON-RPC envelope. That is not a malformed MCP
+ * call; it is the documented request. Treating it as a protocol error returned
+ * HTTP 200 and no 402, which is what the review rejected #7138 for:
+ *
+ *   "POST-with-body returns HTTP 200 … never issues an HTTP 402 challenge"
+ *
+ * A genuine MCP client always sends `jsonrpc` and `method`, so keying off their
+ * absence separates the two without weakening the protocol path.
+ */
+export function isJsonRpcRequest(body: unknown): boolean {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return false;
+  const bag = body as Record<string, unknown>;
+  return typeof bag.jsonrpc === "string" || typeof bag.method === "string";
+}
+
+/**
+ * The Express call a bare POST body represents, or null if this is not one.
+ *
+ * Deliberately permissive about the fields: `normaliseExpressArgs` already maps
+ * a flat bag onto the single job type Express sells, so anything object-shaped
+ * that is not JSON-RPC is treated as a purchase attempt and answered with a 402.
+ * Answering "here is the price" is always safe — no work happens and no money
+ * moves until a valid payment arrives.
+ */
+export function directExpressCall(body: unknown): ExpressArgs | null {
+  if (isJsonRpcRequest(body)) return null;
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
+  return normaliseExpressArgs(body);
+}
+
 /** Job types Express sells, from the environment. */
 export function expressJobTypes(): string[] {
   return (process.env.EXPRESS_JOB_TYPES ?? "market_snapshot")

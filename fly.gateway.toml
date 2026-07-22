@@ -24,6 +24,11 @@ primary_region = "sin"
   EXPRESS_JOB_TYPES = "market_snapshot"
   # 0.1 USDT
   EXPRESS_PRICE_UNITS = "100000"
+  # Read at boot by the fulfilment guard, which refuses to start this gateway in
+  # enforce mode unless the procurer reports real payments, a wallet key AND real
+  # refunds. Reached over 6PN; the procurer has no public address. The gateway
+  # never calls it per-request — the worker owns that connection.
+  PROCURER_URL = "http://firm-procurer.internal:8787"
 
 # Secrets, set with `fly secrets set -a firm-gateway`:
 #   DATABASE_URL, FIRM_PAYTO_ADDRESS, FIRM_CHARGE_ASSET, FIRM_CHARGE_NETWORK

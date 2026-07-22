@@ -116,8 +116,8 @@
         }
       ],
       "services_dropped": 0,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 0,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 30,
@@ -126,7 +126,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "HTTP_ERROR",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "listed endpoint returned HTTP 404: {\"error\":\"not_found\"}",
+        "treatment": "listed endpoint returns an HTTP error"
+      }
     },
     {
       "agent_id": "5082",
@@ -155,8 +163,8 @@
         }
       ],
       "services_dropped": 0,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 0,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 3,
@@ -165,7 +173,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "UNREACHABLE",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "fetch failed (2 attempts)",
+        "treatment": "listed endpoint is unreachable"
+      }
     },
     {
       "agent_id": "5047",
@@ -194,8 +210,8 @@
         }
       ],
       "services_dropped": 0,
-      "kya_base_score": 89,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 0,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 88.89,
       "marketplace_security_rate": 4.44,
       "sold_count": 33,
@@ -204,7 +220,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 89,
+      "measured_health": {
+        "verdict": "UNREACHABLE",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "fetch failed (2 attempts)",
+        "treatment": "listed endpoint is unreachable"
+      }
     },
     {
       "agent_id": "3733",
@@ -233,8 +257,8 @@
         }
       ],
       "services_dropped": 0,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 0,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 4,
       "sold_count": 1,
@@ -243,7 +267,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "UNREACHABLE",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "fetch failed (2 attempts)",
+        "treatment": "listed endpoint is unreachable"
+      }
     },
     {
       "agent_id": "5524",
@@ -273,7 +305,7 @@
       ],
       "services_dropped": 0,
       "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 12,
@@ -282,7 +314,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "X402_OK",
+        "hireable": true,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "live and conformant at 10000 base units via exact",
+        "treatment": "live and correctly challenging for payment"
+      }
     },
     {
       "agent_id": "5557",
@@ -330,7 +370,7 @@
       ],
       "services_dropped": 1,
       "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 1,
@@ -339,7 +379,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "X402_OK",
+        "hireable": true,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "live and conformant at 100000 base units via exact",
+        "treatment": "live and correctly challenging for payment"
+      }
     },
     {
       "agent_id": "3118",
@@ -368,8 +416,8 @@
         }
       ],
       "services_dropped": 61,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 0,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 1566,
@@ -378,7 +426,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "HTTP_ERROR",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "listed endpoint returned HTTP 404: {\"error\":\"Not found\"}",
+        "treatment": "listed endpoint returns an HTTP error"
+      }
     },
     {
       "agent_id": "5175",
@@ -443,8 +499,8 @@
         }
       ],
       "services_dropped": 0,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 0,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 635,
@@ -453,7 +509,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "UNREACHABLE",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "fetch failed (2 attempts)",
+        "treatment": "listed endpoint is unreachable"
+      }
     },
     {
       "agent_id": "2013",
@@ -1905,7 +1969,7 @@
       ],
       "services_dropped": 0,
       "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 1520,
@@ -1914,7 +1978,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "X402_OK",
+        "hireable": true,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "live and conformant at 1000 base units via exact",
+        "treatment": "live and correctly challenging for payment"
+      }
     },
     {
       "agent_id": "2023",
@@ -2049,7 +2121,7 @@
       ],
       "services_dropped": 30,
       "kya_base_score": 93,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 92.86,
       "marketplace_security_rate": 4.86,
       "sold_count": 1572,
@@ -2058,7 +2130,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 93,
+      "measured_health": {
+        "verdict": "X402_OK",
+        "hireable": true,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "live and conformant at 75 base units via exact",
+        "treatment": "live and correctly challenging for payment"
+      }
     },
     {
       "agent_id": "3209",
@@ -2087,8 +2167,8 @@
         }
       ],
       "services_dropped": 0,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 60,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 4.5,
       "sold_count": 11,
@@ -2097,7 +2177,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "PRICE_MISMATCH",
+        "hireable": true,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "listed 5000 but the live 402 demands 3000000 (600x)",
+        "treatment": "live price differs from the listed price"
+      }
     },
     {
       "agent_id": "6560",
@@ -2126,8 +2214,8 @@
         }
       ],
       "services_dropped": 0,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 60,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 1,
@@ -2136,7 +2224,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "PRICE_MISMATCH",
+        "hireable": true,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "listed 10000 but the live 402 demands 500000 (50x)",
+        "treatment": "live price differs from the listed price"
+      }
     },
     {
       "agent_id": "2134",
@@ -2166,7 +2262,7 @@
       ],
       "services_dropped": 0,
       "kya_base_score": 0,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 0,
       "marketplace_security_rate": 1,
       "sold_count": 11,
@@ -2179,7 +2275,15 @@
         "LOW_FEEDBACK_RATE"
       ],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 0,
+      "measured_health": {
+        "verdict": "UNREACHABLE",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "fetch failed (2 attempts)",
+        "treatment": "listed endpoint is unreachable"
+      }
     },
     {
       "agent_id": "2135",
@@ -2389,7 +2493,7 @@
       ],
       "services_dropped": 2,
       "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 5,
       "sold_count": 410,
@@ -2398,7 +2502,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "X402_OK",
+        "hireable": true,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "live and conformant at 2000 base units via exact",
+        "treatment": "live and correctly challenging for payment"
+      }
     },
     {
       "agent_id": "2012",
@@ -2481,8 +2593,8 @@
         }
       ],
       "services_dropped": 6,
-      "kya_base_score": 100,
-      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score",
+      "kya_base_score": 0,
+      "score_source": "marketplace_feedback_rate_SUBSTITUTED_for_kya_base_score; adjusted_by_tools/vendor-index/apply-health.js",
       "marketplace_feedback_rate": 100,
       "marketplace_security_rate": 4.91,
       "sold_count": 343,
@@ -2491,7 +2603,15 @@
       ],
       "flags": [],
       "flags_source": "derived_by_tools/vendor-index/generate.js",
-      "last_verified_at": "2026-07-20T07:50:09.698Z"
+      "last_verified_at": "2026-07-20T07:50:09.698Z",
+      "kya_base_score_original": 100,
+      "measured_health": {
+        "verdict": "HTTP_ERROR",
+        "hireable": false,
+        "checked_at": "2026-07-21T13:44:35.461Z",
+        "detail": "listed endpoint returned HTTP 404: {\"raw\":\"<!DOCTYPE html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\">\\n<title>Error</title>\\n</head>\\n<body>\\n<pre>Cannot POST /barker_defi_vaults</pre>\\n<sc",
+        "treatment": "listed endpoint returns an HTTP error"
+      }
     }
   ]
 }

@@ -64,11 +64,15 @@ means the claim comes out of the copy — not that the entry waits.
       revenue
 - [x] Provenance economics reconcile: `user_price = vendor_costs + books + margin`
 - [ ] Any simulated demo segment is labelled `SIMULATED` on screen
-- [ ] **The refund path has moved real money.** Until then the guarantee is
-      described as implemented and tested, never as *proven in production*.
-- [ ] **One inbound customer payment has settled.** Until then the wording is
-      "two real third-party procurement transactions, zero customer revenue".
-      Outbound spend is a cost and must never be presented as traction.
+- [x] **The refund path has moved real money.** Two automatic refunds on X Layer,
+      each triggered by a failed delivery with no human in the loop. The
+      guarantee may now be described as proven in production.
+- [x] **One inbound customer payment has settled.** Several have, and one
+      completed with a deliverable (`t_c6aaf880…`, settle
+      `0x47b3572a…9713`). **But every purchase was our own QA transaction from
+      our own wallet.** The wording is "the paid path works end to end; zero
+      external customers". Self-purchases are evidence the machine runs and are
+      never revenue, demand, or traction.
 - [ ] "Darwinian" is not used publicly unless the whole loop is demonstrable:
       vendor ranks high -> paid result fails a validator -> score drops -> a
       later job ranks it lower. Otherwise say "adaptive fallback with
@@ -76,11 +80,14 @@ means the claim comes out of the copy — not that the entry waits.
 
 ## D. Known limitations — disclose rather than fix
 
-- Firm Projects cannot drive schema-bearing vendors
+- Firm Projects cannot drive schema-bearing vendors — and it is **registered on
+  the listing while failing `x402-check`** (returns HTTP 200, never a 402).
+  Remove it: one working service beats two where one is invalid.
 - The books line is SIMULATED until Treasury is listed
-- The settle success path is unproven: auth and rejection are verified against
-  OKX's live facilitator, but no valid authorization has completed
 - Multi-subtask jobs work in code, never run against real vendors
+- Only one marketplace vendor (OKLink #2023) publishes a machine-readable
+  request schema, so Express is refused before payment when a job lacks the
+  args that vendor needs — correct behaviour, and a narrow vendor pool
 
 ---
 

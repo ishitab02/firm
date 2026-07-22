@@ -10,9 +10,16 @@
 # without one.
 #
 # FIRM_WALLET_KEY is passed at run time and never baked into the image.
+#
+# This image is self-sufficient as of 2026-07-22. It previously shelled out to
+# the `onchainos` CLI to sign, which could never work here: that CLI is a
+# macOS-only binary whose Agentic Wallet login is browser-based, so a container
+# could hold a funded key and still be unable to spend or refund. Signing now
+# happens in-process with viem, so the only external dependency left is an RPC
+# endpoint.
 FROM node:20-slim
 
-# The signer shells out to the OKX CLI, which needs a real certificate store.
+# HTTPS to the chain RPC and to vendor endpoints needs a real certificate store.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*

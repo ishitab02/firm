@@ -61,12 +61,27 @@ export type SelectedOffer = {
 };
 
 /**
- * `pay-local` signs with a local hex key and supports exactly these schemes.
- * `aggr_deferred` needs a TEE-resident session key, which the procurer does not
- * have, so an aggr_deferred-only vendor is a hard stop rather than a silent
- * fallback to some other entry the human never approved.
+ * Schemes a local hex key can sign. `aggr_deferred` needs a TEE-resident
+ * session key, which the procurer does not have, so an aggr_deferred-only
+ * vendor is a hard stop rather than a silent fallback to some other entry the
+ * human never approved.
  */
 export const LOCAL_SIGNABLE_SCHEMES = ["exact", "upto"] as const;
+
+/**
+ * What a signer returns: a ready-to-send header, plus the facts worth recording.
+ *
+ * Lives here rather than beside an implementation so the payment flow depends on
+ * the protocol shape, not on how the signature happens to be produced.
+ */
+export type SignedPayment = {
+  headerName: string;
+  headerValue: string;
+  scheme: string;
+  wallet?: string;
+};
+
+export type Signer = (challenge: X402Challenge, offer: SelectedOffer) => Promise<SignedPayment>;
 
 export class X402Error extends Error {
   constructor(

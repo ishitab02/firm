@@ -8,7 +8,7 @@
  */
 
 import { decodePaymentResponse, parseChallenge, selectOffer, SelectedOffer, X402Error } from "./x402.js";
-import { Signer } from "./signer.js";
+import { Signer } from "./x402.js";
 
 export type VendorCallRequest = {
   vendorEndpoint: string;

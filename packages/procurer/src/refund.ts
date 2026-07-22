@@ -1,25 +1,39 @@
 /**
  * Outbound refund transfer.
  *
- * BLOCKER, recorded in docs/status/F1.md and unresolved as of 2026-07-20:
- * the buyer payment path signs with a local hex key (FIRM_WALLET_KEY, via
- * `onchainos payment pay-local`), but the only outbound-transfer surface the
- * CLI exposes is `onchainos wallet send`, which signs through the logged-in
- * TEE-backed Agentic Wallet account. Those are not necessarily the same wallet.
+ * REVISED 2026-07-22 by Poulav (option 3b): the OKX CLI is out of the money
+ * path entirely, and refunds now send in-process from the same wallet that
+ * pays vendors and receives customer payments.
  *
- * Consequences a human has to choose between:
- *   (a) keep this path, and require that the logged-in Agentic Wallet account
- *       is the same funded account whose key is in FIRM_WALLET_KEY, or
- *   (b) add a local ERC-20 transfer signer to the procurer, which means a new
- *       web3 dependency plus a verified RPC endpoint.
- * Until that is closed, real refunds require REAL_REFUNDS_ENABLED to be set
- * explicitly — REAL_PAYMENTS_ENABLED alone does not turn them on.
+ *   payments out   EIP-3009 authorization, signed locally  -> 0xC029…50e0
+ *   refunds out    ERC-20 transfer, signed locally         -> 0xC029…50e0
+ *   money in       FIRM_PAYTO_ADDRESS                      -> 0xC029…50e0
+ *
+ * The previous design used `onchainos wallet send`, which signs through the
+ * logged-in Agentic Wallet. That forced a two-wallet split — the CLI's account
+ * cannot be set from a hex key — and, more seriously, could not run in
+ * production at all: the CLI is a macOS-only binary whose login is browser-based,
+ * so a container can neither execute nor authenticate it. The deployed procurer
+ * could hold a funded key and still be unable to refund a customer, which is the
+ * guarantee failing exactly where it is load-bearing.
+ *
+ * Signing locally removes both problems and collapses the three roles onto one
+ * address, so the wallet that took the money is the wallet that gives it back.
+ *
+ * What it costs: a refund is now a transaction we broadcast, not an
+ * authorization someone else redeems, so this wallet must hold native gas. That
+ * is a new operational dependency and it is checked before sending rather than
+ * discovered as a revert.
+ *
+ * Real refunds still require REAL_REFUNDS_ENABLED explicitly — REAL_PAYMENTS_ENABLED
+ * alone does not turn them on.
  */
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { createWalletClient, http, type Address, type Chain, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
-const execFileAsync = promisify(execFile);
+import { publicClientFor, rpcUrlFor, TOKEN_ABI } from "./chain.js";
+import { walletKeyFromEnv } from "./local-signer.js";
 
 export type RefundResult = { ok: true; tx: string; detail: string } | { ok: false; detail: string };
 
@@ -39,64 +53,169 @@ export type RefundMode = "real" | "simulated" | "requires_human";
  * for a buyer who genuinely paid, which the worker then persists and reports as
  * REFUNDED. It breaks the no-fabricated-tx rule and the delivery guarantee in
  * one step, so it fails closed and asks for a human instead.
- *
- * This is a reachable configuration, not a theoretical one: G1 and G2 both ran
- * under it, because the refund-wallet question (payer 0xc029… is not the
- * CLI-logged-in account) is still open.
  */
 export function refundMode(switches: { realPayments: boolean; realRefunds: boolean }): RefundMode {
   if (switches.realRefunds) return "real";
   return switches.realPayments ? "requires_human" : "simulated";
 }
 
+/** The account refunds must leave from. Unset is a hard failure, not a default. */
+export function expectedRefundWallet(): string | null {
+  const pinned = process.env.REFUND_FROM_ADDRESS;
+  return pinned && pinned.length > 0 ? pinned : null;
+}
+
+export const UNPINNED_WALLET =
+  "REFUND_FROM_ADDRESS is unset while real refunds are enabled. Refusing to refund from " +
+  "whichever account the CLI happens to have selected — pin the wallet explicitly.";
+
+/**
+ * Why the refund must not proceed, or null when the signing key is the pinned account.
+ *
+ * The threat this guards changed with the move to local signing, and it is
+ * worth being precise about. It is no longer "an external account we cannot
+ * verify" — the key is ours and its address is deterministic. It is now "the
+ * wrong key is deployed": a staging or personal key reaching production would
+ * refund real customers from an unfunded or unintended wallet, and every log
+ * line would look normal. Requiring the operator to state which wallet this
+ * deployment spends from turns that into a startup-time mismatch instead.
+ *
+ * Address comparison is case-insensitive: the chain reports lowercase, EIP-55
+ * checksummed values are what humans paste into env files, and a case
+ * difference between two spellings of the same account is not a mismatch.
+ */
+export function refundWalletFailure(expected: string | null, actual: string | null): string | null {
+  if (!expected) return UNPINNED_WALLET;
+  if (!actual) {
+    return (
+      "could not derive an address from the signing key, so the refund wallet cannot be " +
+      "verified. Refusing to send from an unverified account."
+    );
+  }
+  if (expected.toLowerCase() !== actual.toLowerCase()) {
+    return (
+      `refund wallet mismatch: REFUND_FROM_ADDRESS is ${expected} but the signing key is ` +
+      `${actual}. Refusing to send a customer refund from an account this deployment does not claim.`
+    );
+  }
+  return null;
+}
+
+/** Minimal chain descriptor. viem needs an id and an endpoint; nothing else is used here. */
+export function chainFor(chainId: number): Chain {
+  return {
+    id: chainId,
+    name: `eip155-${chainId}`,
+    nativeCurrency: { name: "native", symbol: "NATIVE", decimals: 18 },
+    rpcUrls: { default: { http: [rpcUrlFor(chainId)] } }
+  };
+}
+
+/**
+ * Is there enough native balance to broadcast a token transfer?
+ *
+ * Pure, so the arithmetic is testable without a chain. Deliberately checked
+ * before sending: an out-of-gas refund fails as an opaque RPC error at the
+ * moment the guarantee is being invoked, which is the worst time to be
+ * debugging an operational gap.
+ */
+export function gasShortfall(input: {
+  balanceWei: bigint;
+  gasPriceWei: bigint;
+  gasLimit: bigint;
+}): string | null {
+  const needed = input.gasPriceWei * input.gasLimit;
+  if (input.balanceWei >= needed) return null;
+  return (
+    `refund wallet holds ${input.balanceWei} wei of native gas but the transfer needs about ` +
+    `${needed} wei (${input.gasLimit} gas at ${input.gasPriceWei} wei). Fund the wallet before ` +
+    "arming real refunds."
+  );
+}
+
+/** Gas a plain ERC-20 transfer is budgeted at, with headroom over the ~52k typical cost. */
+export const REFUND_GAS_LIMIT = 100_000n;
+
 export async function executeRefund(request: {
   toAddress: string;
   amountUnits: number;
 }): Promise<RefundResult> {
-  const binary = process.env.OKX_CLI_BIN ?? "onchainos";
-  // TODO(unverified): REFUND_CHAIN and REFUND_TOKEN_CONTRACT are not guessed
-  // here. Nothing moves until a human supplies the chain and the token contract
-  // the Firm actually refunds in.
-  const chain = process.env.REFUND_CHAIN;
+  const chainIdRaw = process.env.REFUND_CHAIN;
   const contract = process.env.REFUND_TOKEN_CONTRACT;
-  if (!chain || !contract) {
+  if (!chainIdRaw || !contract) {
     return {
       ok: false,
       detail: "REFUND_CHAIN and REFUND_TOKEN_CONTRACT are unset; refusing to guess the refund asset or network"
     };
   }
+  const chainId = Number(chainIdRaw);
+  if (!Number.isInteger(chainId) || chainId <= 0) {
+    return { ok: false, detail: `REFUND_CHAIN must be a numeric chain id, got ${JSON.stringify(chainIdRaw)}` };
+  }
 
-  const args = [
-    "wallet",
-    "send",
-    "--recipient",
-    request.toAddress,
-    "--amt",
-    String(request.amountUnits),
-    "--chain",
-    chain,
-    "--contract-token",
-    contract,
-    "--force"
-  ];
+  let account;
+  try {
+    account = privateKeyToAccount(walletKeyFromEnv());
+  } catch (error) {
+    return { ok: false, detail: error instanceof Error ? error.message : String(error) };
+  }
+
+  // Verify the wallet BEFORE building the transfer. A refund that leaves the
+  // wrong account cannot be recalled. The unset case returns early rather than
+  // going through refundWalletFailure so `expected` narrows to a string.
+  const expected = expectedRefundWallet();
+  if (expected === null) return { ok: false, detail: UNPINNED_WALLET };
+  const walletFailure = refundWalletFailure(expected, account.address);
+  if (walletFailure) return { ok: false, detail: walletFailure };
+
+  const publicClient = publicClientFor(chainId);
+  const chain = chainFor(chainId);
 
   try {
-    const { stdout } = await execFileAsync(binary, args, {
-      timeout: Number(process.env.REFUND_TIMEOUT_MS ?? 60_000),
-      maxBuffer: 4 * 1024 * 1024
-    });
-    const parsed = JSON.parse(stdout) as Record<string, unknown>;
-    const data = (typeof parsed.data === "object" && parsed.data !== null ? parsed.data : parsed) as Record<
-      string,
-      unknown
-    >;
-    const tx = data.txHash ?? data.transaction ?? data.tx_hash ?? data.orderId;
-    if (typeof tx !== "string" || tx.length === 0) {
-      return { ok: false, detail: `refund transfer returned no transaction reference: ${stdout.slice(0, 300)}` };
-    }
-    return { ok: true, tx, detail: "refund broadcast via Agentic Wallet transfer" };
+    const [balanceWei, gasPriceWei] = await Promise.all([
+      publicClient.getBalance({ address: account.address }),
+      publicClient.getGasPrice()
+    ]);
+    const shortfall = gasShortfall({ balanceWei, gasPriceWei, gasLimit: REFUND_GAS_LIMIT });
+    if (shortfall) return { ok: false, detail: shortfall };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    return { ok: false, detail: `refund transfer failed: ${detail}` };
+    return { ok: false, detail: `could not read refund wallet gas balance: ${detail}` };
+  }
+
+  const walletClient = createWalletClient({ account, chain, transport: http(rpcUrlFor(chainId)) });
+
+  let hash: Hex;
+  try {
+    hash = await walletClient.writeContract({
+      address: contract as Address,
+      abi: TOKEN_ABI,
+      functionName: "transfer",
+      args: [request.toAddress as Address, BigInt(request.amountUnits)],
+      gas: REFUND_GAS_LIMIT
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { ok: false, detail: `refund transfer failed to broadcast: ${detail}` };
+  }
+
+  // A broadcast hash is not a completed refund. A reverted transfer — wrong
+  // token, insufficient balance, a blocked recipient — still produces a hash,
+  // and returning it here would report a refund that never happened and mark
+  // the job REFUNDED. Wait for the receipt and insist on success.
+  try {
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+      timeout: Number(process.env.REFUND_TIMEOUT_MS ?? 60_000)
+    });
+    if (receipt.status !== "success") {
+      return { ok: false, detail: `refund transfer ${hash} reverted on chain ${chainId}` };
+    }
+    return { ok: true, tx: hash, detail: `refund settled in block ${receipt.blockNumber}` };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    // The transaction may still confirm. Report the hash so a human can check
+    // rather than silently retrying and sending the refund twice.
+    return { ok: false, detail: `refund ${hash} broadcast but not confirmed within the timeout: ${detail}` };
   }
 }

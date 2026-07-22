@@ -67,6 +67,78 @@ export type PaymentRequirements = {
   accepts: Array<Record<string, unknown>>;
 };
 
+/**
+ * Decode a buyer's `PAYMENT-SIGNATURE` / `X-PAYMENT` header into the object the
+ * facilitator expects.
+ *
+ * This is not a convenience. OKX's facilitator takes a **decoded**
+ * `paymentPayload` object; handing it the base64 header string instead returns
+ * `30001 incorrect params`, which the gateway then surfaced as the generic
+ * "facilitator rejected the payment". The two are indistinguishable from the
+ * outside, so a malformed request looked exactly like a buyer sending a bad
+ * signature — and every inbound payment the Firm ever received failed this way.
+ *
+ * Confirmed against the live facilitator with a real Agentic Wallet signature:
+ * `{paymentHeader, paymentRequirements}` -> 30001; the same signature under
+ * `{x402Version, paymentPayload, paymentRequirements}` -> `isValid: true`.
+ * See scripts/probe-facilitator.ts.
+ *
+ * Returns null when the header is not decodable JSON, so the caller refuses
+ * rather than forwarding something the facilitator would reject anyway.
+ */
+/**
+ * Unwrap OKX's response envelope and pull out a legible failure reason.
+ *
+ * Two things bit us here, and both were silent:
+ *
+ * 1. **The x402 fields live inside `data`.** A successful verify is
+ *    `{code: 0, data: {isValid: true, payer: "0x…"}, …}`. Reading `raw.isValid`
+ *    gives `undefined`, so a perfectly valid payment was scored invalid and
+ *    rejected. The generic x402 facilitator spec returns these at the top level;
+ *    OKX wraps them, and supporting both is the whole job of this function.
+ *
+ * 2. **OKX errors carry none of the fields we looked for.** The refusal shape is
+ *    `{error_code, error_message, msg, detailMsg}` — not `invalidReason`,
+ *    `reason` or `error` — so every OKX-level failure, including a bad request
+ *    shape or an auth failure, collapsed into the same "facilitator rejected the
+ *    payment". That single opaque string is why a malformed request was
+ *    indistinguishable from a buyer's bad signature for as long as it was.
+ */
+export function unwrapFacilitatorResponse(raw: Record<string, unknown>): {
+  payload: Record<string, unknown>;
+  errorText: string | null;
+} {
+  const inner = raw.data;
+  const payload =
+    typeof inner === "object" && inner !== null && !Array.isArray(inner)
+      ? (inner as Record<string, unknown>)
+      : raw;
+
+  // `code: 0` / `error_code: "0"` mean success; don't report those as errors.
+  const isZero = (value: unknown) => value === 0 || value === "0";
+  const failed = !isZero(raw.code) && raw.code !== undefined ? true : !isZero(raw.error_code) && raw.error_code !== undefined;
+  const errorText = failed
+    ? [raw.error_message, raw.msg, raw.detailMsg]
+        .find((value) => typeof value === "string" && value.length > 0) as string | undefined ?? null
+    : null;
+
+  return { payload, errorText };
+}
+
+export function decodePaymentHeader(headerValue: string): Record<string, unknown> | null {
+  try {
+    const normalised = headerValue.trim().replaceAll("-", "+").replaceAll("_", "/");
+    const decoded = JSON.parse(Buffer.from(normalised, "base64").toString("utf8"));
+    // Arrays pass a naive `typeof === "object"` check and are not payment
+    // payloads; forwarding one would earn the same opaque 30001 this exists to
+    // prevent.
+    if (typeof decoded !== "object" || decoded === null || Array.isArray(decoded)) return null;
+    return decoded as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export class ChargingNotConfigured extends Error {}
 
 /**
@@ -136,13 +208,22 @@ export async function verifyPayment(
     };
   }
 
+  const paymentPayload = decodePaymentHeader(headerValue);
+  if (!paymentPayload) {
+    return { ok: false, reason: "payment header is not decodable base64 JSON" };
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
   try {
     const url = facilitatorUrlFor(options.facilitatorUrl, "verify");
     // Serialise once and sign that exact string: re-serialising can reorder
     // keys and invalidate the signature.
-    const body = JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] });
+    const body = JSON.stringify({
+      x402Version: requirements.x402Version,
+      paymentPayload,
+      paymentRequirements: requirements.accepts[0]
+    });
     const response = await fetch(url, {
       method: "POST",
       headers: facilitatorHeaders(url, body),
@@ -153,16 +234,18 @@ export async function verifyPayment(
       return { ok: false, reason: `facilitator returned HTTP ${response.status}` };
     }
     const raw = (await response.json()) as Record<string, unknown>;
-    const valid = raw.isValid === true || raw.valid === true || raw.status === "success";
+    const { payload, errorText } = unwrapFacilitatorResponse(raw);
+    const valid = payload.isValid === true || payload.valid === true || payload.status === "success";
     if (!valid) {
-      const reason = raw.invalidReason ?? raw.reason ?? raw.error ?? "facilitator rejected the payment";
+      const reason =
+        payload.invalidReason ?? payload.invalidMessage ?? errorText ?? "facilitator rejected the payment";
       return { ok: false, reason: String(reason) };
     }
     return {
       ok: true,
-      payer: typeof raw.payer === "string" ? raw.payer : undefined,
-      transaction: typeof raw.transaction === "string" ? raw.transaction : undefined,
-      amount: typeof raw.amount === "string" ? raw.amount : undefined,
+      payer: typeof payload.payer === "string" ? payload.payer : undefined,
+      transaction: typeof payload.transaction === "string" ? payload.transaction : undefined,
+      amount: typeof payload.amount === "string" ? payload.amount : undefined,
       raw
     };
   } catch (error) {
@@ -220,11 +303,22 @@ export async function settlePayment(
     };
   }
 
+  // Same decoded-payload contract as verify: a base64 header string here returns
+  // 30001 and reads downstream as "the facilitator did not settle".
+  const paymentPayload = decodePaymentHeader(headerValue);
+  if (!paymentPayload) {
+    return { ok: false, reason: "payment header is not decodable base64 JSON" };
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
   try {
     const url = facilitatorUrlFor(options.facilitatorUrl, "settle");
-    const body = JSON.stringify({ paymentHeader: headerValue, paymentRequirements: requirements.accepts[0] });
+    const body = JSON.stringify({
+      x402Version: requirements.x402Version,
+      paymentPayload,
+      paymentRequirements: requirements.accepts[0]
+    });
     const response = await fetch(url, {
       method: "POST",
       headers: facilitatorHeaders(url, body),
@@ -235,13 +329,16 @@ export async function settlePayment(
       return { ok: false, reason: `facilitator settle returned HTTP ${response.status}` };
     }
     const raw = (await response.json()) as Record<string, unknown>;
-    const settled = raw.success === true || raw.status === "success" || raw.settled === true;
+    // Same envelope as verify: the settlement fields are inside `data`.
+    const { payload, errorText } = unwrapFacilitatorResponse(raw);
+    const settled = payload.success === true || payload.status === "success" || payload.settled === true;
     if (!settled) {
-      const reason = raw.errorReason ?? raw.invalidReason ?? raw.reason ?? raw.error ?? "facilitator did not settle";
+      const reason =
+        payload.errorReason ?? payload.invalidReason ?? errorText ?? "facilitator did not settle";
       return { ok: false, reason: String(reason) };
     }
 
-    const transaction = raw.transaction ?? raw.txHash ?? raw.tx_hash;
+    const transaction = payload.transaction ?? payload.txHash ?? payload.tx_hash;
     if (typeof transaction !== "string" || transaction.length === 0) {
       return { ok: false, reason: "facilitator reported settlement without a transaction reference" };
     }

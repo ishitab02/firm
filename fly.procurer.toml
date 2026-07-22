@@ -20,12 +20,30 @@ primary_region = "sin"
   # Must be "::" — 6PN is IPv6-only, and the worker reaches this at
   # firm-procurer.internal:8787. A 0.0.0.0 bind is IPv4 and answers nothing there.
   HOST = "::"
-  # Off until a human explicitly arms it. The procurer additionally refuses to
-  # start with real payments on unless both x402 allow-lists are set.
-  REAL_PAYMENTS_ENABLED = "false"
-  REAL_REFUNDS_ENABLED = "false"
+  # ARMED 2026-07-22 on Poulav's explicit go, for G3: the first live payment
+  # from the deployed procurer. The procurer additionally refuses to start with
+  # real payments on unless both x402 allow-lists are set.
+  #
+  # Refunds armed 2026-07-22, after G3 proved the payment leg from this machine.
+  # The gateway refuses to take money it cannot refund (fulfilment.ts), so this
+  # is what unblocks shipping the facilitator fix — and the guarantee is the
+  # product, which makes an unrefundable sale the worst available outcome.
+  REAL_PAYMENTS_ENABLED = "true"
+  REAL_REFUNDS_ENABLED = "true"
   X402_ALLOWED_ASSETS = "0x779ded0c9e1022225f8e0630b35a9b54be713736"
   X402_ALLOWED_NETWORKS = "eip155:196"
+
+  # Signing is in-process now, so an RPC endpoint is the money path's only
+  # external dependency. Explicit rather than relying on the built-in default.
+  X402_RPC_URL_196 = "https://rpc.xlayer.tech"
+
+  # Refund target config. Inert while REAL_REFUNDS_ENABLED is false, but set now
+  # so arming refunds later is a one-line change rather than a scramble.
+  # REFUND_FROM_ADDRESS must equal the address FIRM_WALLET_KEY derives to; it is
+  # checked before every transfer and a mismatch refuses to send.
+  REFUND_CHAIN = "196"
+  REFUND_TOKEN_CONTRACT = "0x779ded0c9e1022225f8e0630b35a9b54be713736"
+  REFUND_FROM_ADDRESS = "0xC0296012Cfbb0e6DF5dA7158B65Dbc46DD9650e0"
 
 # Secrets, set with `fly secrets set -a firm-procurer`:
 #   DATABASE_URL
