@@ -201,7 +201,10 @@ async def _procure_subtask(
 
         response = await procurer.pay_and_call(
             PayAndCallRequest(
-                vendor_endpoint=vendor.endpoint,
+                # The SELECTED service's endpoint, not the vendor-wide one.
+                # Falling back here is what sent every CoinAnk request to its
+                # Bitcoin ETF URL no matter which service was chosen.
+                vendor_endpoint=service.endpoint or vendor.endpoint,
                 tool=service.tool,
                 args=args,
                 max_amount=service.price,

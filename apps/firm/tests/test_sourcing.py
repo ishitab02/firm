@@ -48,16 +48,21 @@ def test_firing_decrements_immediately() -> None:
 # `endpoint` attribute is exactly what let this ship broken: the tests passed
 # while production raised AttributeError on every single job, because
 # VendorService has no such field. Use the type the code will actually receive.
-def _svc(tool, capability="market_snapshot"):
-    return VendorService(tool=tool, capability=capability, price=Money(amount="10000", decimals=6, token="USDT"))
+def _svc(tool, capability="market_snapshot", endpoint=None):
+    return VendorService(
+        tool=tool,
+        capability=capability,
+        endpoint=endpoint,
+        price=Money(amount="10000", decimals=6, token="USDT"),
+    )
 
 
 def _coinank():
     return [
-        _svc("US BTC ETF"),
-        _svc("US ETH ETF"),
-        _svc("Pair Last Price"),
-        _svc("News Feed", capability="news"),
+        _svc("US BTC ETF", endpoint="https://open-api.coinank.com/api/etf/getUsBtcEtf"),
+        _svc("US ETH ETF", endpoint="https://open-api.coinank.com/api/etf/getUsEthEtf"),
+        _svc("Pair Last Price", endpoint="https://open-api.coinank.com/api/instruments/getLastPrice"),
+        _svc("News Feed", capability="news", endpoint="https://example.invalid/news"),
     ]
 
 
@@ -92,3 +97,34 @@ def test_wrong_asset_endpoint_is_the_last_resort_not_the_first():
     only_btc = [_svc("US BTC ETF"), _svc("Generic Feed")]
     chosen = select_service(only_btc, "market_snapshot", {"symbol": "ETH"})
     assert chosen.tool == "Generic Feed"
+
+
+def test_the_selected_service_carries_its_own_endpoint():
+    """Selecting the right service is useless if the call posts elsewhere.
+
+    VendorService used to drop the per-service endpoint, so the HTTP call fell
+    back to the vendor-wide URL -- CoinAnk's, which is its Bitcoin ETF endpoint.
+    An ETH request selected the ETH service and then posted to the BTC one. The
+    selection and the call must agree, so assert on the URL, not the tool name.
+    """
+    chosen = select_service(_coinank(), "market_snapshot", {"symbol": "ETH"})
+    assert chosen.endpoint == "https://open-api.coinank.com/api/etf/getUsEthEtf"
+
+    chosen = select_service(_coinank(), "market_snapshot", {"symbol": "BTC"})
+    assert chosen.endpoint == "https://open-api.coinank.com/api/etf/getUsBtcEtf"
+
+
+def test_index_entries_parse_their_per_service_endpoints():
+    """The real index file must survive the model, or the fix is inert."""
+    import json
+    from pathlib import Path
+
+    from firm.models import VendorIndexEntry
+
+    payload = json.loads(Path("../../data/vendor-index.json").read_text())
+    vendors = payload["vendors"] if isinstance(payload, dict) and "vendors" in payload else payload
+    coinank = next(v for v in vendors if str(v["agent_id"]) == "2013")
+    entry = VendorIndexEntry.model_validate(coinank)
+    endpoints = {s.endpoint for s in entry.services}
+    assert len(endpoints) > 1, "per-service endpoints were dropped by the model"
+    assert any(e and "getUsEthEtf" in e for e in endpoints)

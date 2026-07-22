@@ -92,6 +92,13 @@ class VendorService(BaseModel):
     tool: str
     price: Money
     capability: str
+    #: The service's OWN endpoint. The index publishes one per service and this
+    #: model used to drop it, so every call fell back to the vendor-wide
+    #: `VendorIndexEntry.endpoint` -- which is simply the first service's URL.
+    #: CoinAnk lists 80 services under one agent, so an ETH request selected the
+    #: ETH service and then posted to the BTC endpoint anyway. Optional because
+    #: older index files predate the field; callers fall back when it is None.
+    endpoint: str | None = None
     #: What the vendor published about its own request body, when it published
     #: anything: {"args": {...}, "source": "..."} from tools/vendor-index.
     #: None means unknown — never "takes no arguments". Only a handful of
