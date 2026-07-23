@@ -123,6 +123,17 @@ export async function payAndCallVendor(
      * stake and the mock vendors are not all well-formed.
      */
     requireKnownDecimals?: boolean;
+    /**
+     * Retry one vendor-issued 402 with the exact same signed authorization.
+     *
+     * This does not create a second authorization: the same header, signature,
+     * validity window and EIP-3009 nonce are replayed once, and only when the
+     * refreshed challenge still names the same payment terms and resource.
+     * It is therefore safe when the first attempt was accepted asynchronously,
+     * while recovering from a transient facilitator/challenge race.
+     */
+    retryRejectedAuthorization?: boolean;
+    retryDelayMs?: number;
     timeoutMs?: number;
   }
 ): Promise<VendorCallOutcome> {
@@ -244,16 +255,77 @@ export async function payAndCallVendor(
     return { ok: false, error_code: "VENDOR_TIMEOUT", detail: `replay failed: ${detail}` };
   }
 
-  const replayHeaders = headerBag(replay);
-  const settlement = decodePaymentResponse(replayHeaders["payment-response"]);
+  if (replay.status === 402 && options.retryRejectedAuthorization) {
+    const refreshedHeaders = headerBag(replay);
+    const refreshedBody = await readBody(replay);
+    let refreshedChallenge;
+    let refreshedOffer: SelectedOffer;
+    try {
+      refreshedChallenge = parseChallenge(refreshedHeaders, refreshedBody);
+      refreshedOffer = selectOffer(refreshedChallenge, {
+        allowedAssets: options.allowedAssets,
+        allowedNetworks: options.allowedNetworks
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        error_code: "PAYMENT_FAILED",
+        detail: `vendor re-issued an unusable 402 after signing: ${detail}`
+      };
+    }
+
+    const resourceIdentity = (envelope: Record<string, unknown>): string => {
+      const resource = envelope.resource;
+      if (typeof resource === "string") return resource;
+      if (resource && typeof resource === "object") {
+        const url = (resource as Record<string, unknown>).url;
+        if (typeof url === "string") return url;
+      }
+      return JSON.stringify(resource ?? null);
+    };
+    const sameTerms =
+      refreshedOffer.amountUnits === offer.amountUnits &&
+      refreshedOffer.scheme === offer.scheme &&
+      refreshedOffer.network.toLowerCase() === offer.network.toLowerCase() &&
+      refreshedOffer.asset.toLowerCase() === offer.asset.toLowerCase() &&
+      refreshedOffer.payTo.toLowerCase() === offer.payTo.toLowerCase() &&
+      refreshedOffer.declaredDecimals === offer.declaredDecimals &&
+      resourceIdentity(refreshedChallenge.envelope) === resourceIdentity(challenge.envelope);
+    if (!sameTerms) {
+      return {
+        ok: false,
+        error_code: "PAYMENT_FAILED",
+        detail: "vendor changed payment terms or resource after signing; refusing to replay the authorization"
+      };
+    }
+
+    const retryDelayMs = options.retryDelayMs ?? 200;
+    if (retryDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    try {
+      replay = await postJson(url, request.args, { [signed.headerName]: signed.headerValue }, timeoutMs);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        error_code: "VENDOR_TIMEOUT",
+        detail: `same-authorization replay failed: ${detail}`
+      };
+    }
+  }
 
   if (replay.status === 402) {
     return {
       ok: false,
       error_code: "PAYMENT_FAILED",
-      detail: "vendor rejected the signed payment and re-issued a 402; signature may be stale"
+      detail:
+        "vendor rejected the signed payment and re-issued a 402" +
+        (options.retryRejectedAuthorization ? " after one safe same-authorization replay" : "; signature may be stale")
     };
   }
+
+  const replayHeaders = headerBag(replay);
+  const settlement = decodePaymentResponse(replayHeaders["payment-response"]);
   if (!replay.ok) {
     return {
       ok: false,

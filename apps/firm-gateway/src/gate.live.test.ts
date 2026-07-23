@@ -608,7 +608,7 @@ suite("gateway settlement boundary", () => {
     throw new Error("Express task never reached authorized");
   }
 
-  function paidExpress() {
+  function paidExpress(timeframe = "4h") {
     return fetch(settleBase, {
       method: "POST",
       headers: {
@@ -617,7 +617,7 @@ suite("gateway settlement boundary", () => {
       },
       body: JSON.stringify({
         symbol: "ETH",
-        timeframe: "4h",
+        timeframe,
         prompt: "price action, trend, support and resistance"
       })
     });
@@ -682,6 +682,51 @@ suite("gateway settlement boundary", () => {
     });
     const body = await response.json() as any;
     expect(body.error.code).toBe("INVALID_ARGS");
+    expect(paths).toEqual(["/verify"]);
+  });
+
+  it("returns a retriable 503 with the upstream cause when Express fulfilment fails before settlement", async () => {
+    settleBehaviour = "success";
+    paths = [];
+    const pending = paidExpress("1d");
+    const taskId = await waitForAuthorizedExpress();
+    await settleDb.query(
+      `UPDATE firm_jobs
+       SET state = 'failed_not_charged',
+           progress = $2::jsonb,
+           provenance = $3::jsonb,
+           updated_at = now()
+       WHERE task_id = $1`,
+      [
+        taskId,
+        JSON.stringify([
+          {
+            state: "procuring",
+            subtask_id: "market_snapshot",
+            note: "did not hire 2023: PAYMENT_FAILED; the Firm's own decision, not a vendor failure"
+          }
+        ]),
+        JSON.stringify({
+          vendors_rejected: [{
+            agent_id: "2023",
+            reason:
+              "not hired (PAYMENT_FAILED): vendor rejected the signed payment and re-issued a 402 after one safe same-authorization replay"
+          }],
+          guarantee_status: "not_charged"
+        })
+      ]
+    );
+
+    const response = await pending;
+    const body = await response.json() as any;
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("2");
+    expect(body.error).toMatchObject({
+      code: "DELIVERY_FAILED_NOT_CHARGED",
+      retriable: true,
+      task_id: taskId
+    });
+    expect(body.error.detail).toMatch(/PAYMENT_FAILED.*safe same-authorization replay/);
     expect(paths).toEqual(["/verify"]);
   });
 

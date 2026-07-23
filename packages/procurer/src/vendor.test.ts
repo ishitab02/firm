@@ -21,6 +21,8 @@ type ServerBehaviour = {
   challengeAmount?: string;
   challengeIn?: "header" | "body";
   paidStatus?: number;
+  paidStatuses?: number[];
+  reissuedChallengeAmount?: string;
   paidBody?: unknown;
   settlement?: unknown;
   probeStatus?: number;
@@ -31,6 +33,7 @@ const servers: http.Server[] = [];
 /** A vendor that answers 402 until it sees a payment header. */
 async function startVendor(behaviour: ServerBehaviour = {}) {
   const seen: Array<{ headers: http.IncomingHttpHeaders; url?: string }> = [];
+  let paidRequests = 0;
   const server = http.createServer((req, res) => {
     seen.push({ headers: req.headers, url: req.url });
     const paid = req.headers["payment-signature"] ?? req.headers["x-payment"];
@@ -53,13 +56,25 @@ async function startVendor(behaviour: ServerBehaviour = {}) {
       return;
     }
 
+    const paidStatus = behaviour.paidStatuses?.[paidRequests] ?? behaviour.paidStatus ?? 200;
+    paidRequests += 1;
+    if (paidStatus === 402) {
+      const payload = {
+        x402Version: 2,
+        accepts: accepts(behaviour.reissuedChallengeAmount ?? behaviour.challengeAmount ?? "100000")
+      };
+      res.writeHead(402, { "content-type": "application/json", "PAYMENT-REQUIRED": b64(payload) });
+      res.end(JSON.stringify({ error: "payment required" }));
+      return;
+    }
+
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (behaviour.settlement !== null) {
       headers["PAYMENT-RESPONSE"] = b64(
         behaviour.settlement ?? { status: "success", transaction: "0xdeadbeef", payer: "0xfirm" }
       );
     }
-    res.writeHead(behaviour.paidStatus ?? 200, headers);
+    res.writeHead(paidStatus, headers);
     res.end(JSON.stringify(behaviour.paidBody ?? { kind: "market_snapshot", observations: ["ok"] }));
   });
 
@@ -174,8 +189,8 @@ describe("payAndCallVendor", () => {
     if (outcome.ok) expect(outcome.receipt.amount.amount).toBe("90000");
   });
 
-  it("reports a re-issued 402 as a payment failure rather than retrying", async () => {
-    const { endpoint } = await startVendor({ paidStatus: 402 });
+  it("does not retry a re-issued 402 unless the caller enables the safe replay", async () => {
+    const { endpoint, seen } = await startVendor({ paidStatus: 402 });
 
     const outcome = await payAndCallVendor(
       { vendorEndpoint: endpoint, tool: "market_snapshot", args: {} },
@@ -183,6 +198,77 @@ describe("payAndCallVendor", () => {
     );
 
     expect(outcome).toMatchObject({ ok: false, error_code: "PAYMENT_FAILED" });
+    expect(seen).toHaveLength(2);
+  });
+
+  it("recovers from one re-issued 402 by replaying the identical authorization", async () => {
+    const order: string[] = [];
+    const { endpoint, seen } = await startVendor({ paidStatuses: [402, 200] });
+
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: endpoint, tool: "market_snapshot", args: {} },
+      {
+        ...baseOptions,
+        signer: fakeSigner(order),
+        verifyCaps: async () => {
+          order.push("verify");
+          return null;
+        },
+        onSigned: async () => {
+          order.push("onSigned");
+        },
+        retryRejectedAuthorization: true,
+        retryDelayMs: 0
+      }
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(seen).toHaveLength(3);
+    expect(seen[1].headers["payment-signature"]).toBe("signed-payload");
+    expect(seen[2].headers["payment-signature"]).toBe("signed-payload");
+    expect(order).toEqual(["verify", "sign:100000", "onSigned"]);
+  });
+
+  it("refuses a re-issued 402 whose payment terms changed", async () => {
+    const { endpoint, seen } = await startVendor({
+      paidStatus: 402,
+      challengeAmount: "100000",
+      reissuedChallengeAmount: "100001"
+    });
+
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: endpoint, tool: "market_snapshot", args: {} },
+      {
+        ...baseOptions,
+        signer: fakeSigner(),
+        verifyCaps: async () => null,
+        retryRejectedAuthorization: true,
+        retryDelayMs: 0
+      }
+    );
+
+    expect(outcome).toMatchObject({ ok: false, error_code: "PAYMENT_FAILED" });
+    if (!outcome.ok) expect(outcome.detail).toMatch(/changed payment terms/);
+    expect(seen).toHaveLength(2);
+  });
+
+  it("stops after one same-authorization replay", async () => {
+    const { endpoint, seen } = await startVendor({ paidStatus: 402 });
+
+    const outcome = await payAndCallVendor(
+      { vendorEndpoint: endpoint, tool: "market_snapshot", args: {} },
+      {
+        ...baseOptions,
+        signer: fakeSigner(),
+        verifyCaps: async () => null,
+        retryRejectedAuthorization: true,
+        retryDelayMs: 0
+      }
+    );
+
+    expect(outcome).toMatchObject({ ok: false, error_code: "PAYMENT_FAILED" });
+    if (!outcome.ok) expect(outcome.detail).toMatch(/after one safe/);
+    expect(seen).toHaveLength(3);
   });
 
   it("says so instead of inventing a hash when settlement is still pending", async () => {

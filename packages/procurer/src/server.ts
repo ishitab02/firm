@@ -195,6 +195,10 @@ async function handlePayAndCall(body: unknown) {
         // sign — declared by the vendor, or pinned by the allow-lists above,
         // which are mandatory in this mode.
         requireKnownDecimals: true,
+        // OKLink can transiently reject a valid authorization and immediately
+        // re-issue the same 402. Replaying the identical signed header once is
+        // safe: its EIP-3009 nonce is unchanged, so it can settle at most once.
+        retryRejectedAuthorization: true,
         decimals: request.max_amount.decimals,
         token: request.max_amount.token,
         timeoutMs: Number(process.env.VENDOR_TIMEOUT_MS ?? 60_000),

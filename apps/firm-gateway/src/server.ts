@@ -153,6 +153,28 @@ type DeferredCharge = {
   facilitatorUrl: string;
 };
 
+function expressFailureDetail(row: any): string {
+  const rejections = row?.provenance?.vendors_rejected;
+  if (Array.isArray(rejections)) {
+    const reason = [...rejections]
+      .reverse()
+      .find((entry) => entry && typeof entry.reason === "string" && entry.reason.trim());
+    if (reason) return reason.reason;
+  }
+  if (Array.isArray(row?.progress)) {
+    const note = [...row.progress]
+      .reverse()
+      .find(
+        (entry) =>
+          entry &&
+          typeof entry.note === "string" &&
+          !/^(fulfilment failed|generated disclosed books receipt|all candidates exhausted)/i.test(entry.note)
+      );
+    if (note) return note.note;
+  }
+  return "upstream fulfilment failed before settlement; buyer was not charged";
+}
+
 /**
  * Read a live quote. Reads are allowed before payment — we cannot build a 402
  * challenge without knowing the quoted price. It is *writes* that are gated.
@@ -361,7 +383,7 @@ async function toolCall(
     const deadline = Date.now() + expressTimeoutMs();
     while (Date.now() < deadline) {
       const result = await pool().query(
-        "SELECT state, deliverable, provenance, refund FROM firm_jobs WHERE task_id = $1",
+        "SELECT state, deliverable, provenance, refund, progress FROM firm_jobs WHERE task_id = $1",
         [taskId]
       );
       const row: any = result.rows[0];
@@ -388,7 +410,26 @@ async function toolCall(
         return { error: { code: "DELIVERY_FAILED_REFUNDED", refund_tx: row.refund?.tx ?? null } };
       }
       if (row?.state === "failed_not_charged") {
-        return { error: { code: "DELIVERY_FAILED_NOT_CHARGED", detail: "fulfilment failed before settlement" } };
+        const detail = expressFailureDetail(row);
+        console.error(
+          `[alert] express_fulfilment_failed ${JSON.stringify({
+            task_id: taskId,
+            symbol: parsed.data.params?.symbol ?? null,
+            timeframe: parsed.data.params?.timeframe ?? null,
+            state: row.state,
+            detail,
+            buyer_charged: false,
+            retriable: true
+          })}`
+        );
+        return {
+          error: {
+            code: "DELIVERY_FAILED_NOT_CHARGED",
+            detail,
+            retriable: true,
+            task_id: taskId
+          }
+        };
       }
       await sleep(250);
     }
@@ -1040,7 +1081,13 @@ const server = http.createServer(async (req, res) => {
 
     const responseHeaders: Record<string, string> = { "content-type": "application/json" };
     if (responseSettlement?.ok) responseHeaders["PAYMENT-RESPONSE"] = encodeSettlement(responseSettlement);
-    res.writeHead(200, responseHeaders);
+    const responseError =
+      payload && typeof payload === "object" && "error" in payload
+        ? (payload.error as Record<string, unknown> | undefined)
+        : undefined;
+    const transientFulfilmentFailure = responseError?.code === "DELIVERY_FAILED_NOT_CHARGED";
+    if (transientFulfilmentFailure) responseHeaders["Retry-After"] = "2";
+    res.writeHead(transientFulfilmentFailure ? 503 : 200, responseHeaders);
     res.end(JSON.stringify(body.id ? { jsonrpc: "2.0", id: body.id, result: payload } : payload));
   } catch (error) {
     send(res, 500, { error: { code: "GATEWAY_ERROR", detail: String(error) } });
