@@ -387,3 +387,68 @@ copy containing the payment address until Poulav confirms the decision. Actions
 - The buyer wallet funded from an independent wallet — not the Firm's own, which
   would make the purchase circular and inadmissible as evidence of a sale.
 - The live-purchase verification listed in Action 4.
+
+---
+---
+
+# Handoff to Ishita — 2026-07-23 (post-approval)
+
+From: Poulav (F1, via Claude Code). This supersedes the 07-22 section's open
+items. **#7138 is APPROVED AND LISTED.** Both products are proven on real money
+on the current deployment; the last one settled from a plain MetaMask signer
+(`0x256865f3…`, blk 66039342). Two actions remain, and both are yours because
+they need your account.
+
+## ACTION 1 — fix the Firm Projects service record, then coordinate the David ping
+
+One field on service `36228`:
+
+| field | current | new |
+|---|---|---|
+| Endpoint | `https://firm-gateway.fly.dev/` | `https://firm-gateway.fly.dev/projects` |
+| Fee | 1 USDT | unchanged |
+
+Why: the record points at the Express root, so a buyer of the 1 USDT service is
+challenged 0.1 — a public fee mismatch on a listed agent, and the exact red
+flag David told another team about. The corrected endpoint is fully verified:
+`x402-check` on `{}` returns `valid: true` at 1 USDT, and a paid purchase
+completed against it on 2026-07-23 with on-chain settlement.
+
+This needs the account owning `0x5298…fa9e` — yours. Nobody else can do it.
+
+**Sequencing matters:** editing a listed agent re-queued 6258 for review, so
+the moment your edit lands, tell Poulav so he pings David immediately with the
+prepared message (fix disclosed + evidence + re-check request). The goal is to
+make any re-review window minutes, not days. Do not edit and sit on it.
+
+Afterwards, anyone can verify with:
+`onchainos agent service-list --agent-id 7138` — expect the new endpoint, fee
+unchanged, and the listing state intact.
+
+## ACTION 2 — reconcile the stuck `accepted` task
+
+Still open from 07-22. It is an unresolved financial record on your agent:
+settle its payment or refund it, THEN close it. From your account:
+`onchainos agent task-in-progress --agent-ids 7138` to find it. If it needs a
+refund you cannot trigger, say so and Poulav runs it through the procurer.
+Closing without resolving is the one move that contradicts everything the
+listing claims about how we handle money.
+
+## What NOT to do
+
+- No code changes, no deploys, no listing-copy edits. The code's job until the
+  27th is to not change. If something looks broken, run
+  `node tools/review/preflight.mjs` and report what it says instead of fixing.
+- Do not repeat the "~10x premium" pricing line anywhere — it was wrong on the
+  facts. The current answer is in LISTING_DRAFT.md ("we price at market").
+- Projects settles BEFORE the vendor legs, by design, with the refund as the
+  guarantee. Earlier materials said the opposite; if you wrote anything from
+  them, the corrected description is in LISTING_DRAFT.md.
+
+## Context you should have
+
+- Grok's adversarial score: 69/100. Weakest axis: demand (5/20) — the fix for
+  that is the external tester (Poulav's action, EXTERNAL_TEST_BRIEF.md) and
+  the demo film (Poulav's), not anything in your lane.
+- Historical runbooks (G2/G3/live-payment/first-customer) are deleted from the
+  tree; their content survives in git history and docs/status/.
