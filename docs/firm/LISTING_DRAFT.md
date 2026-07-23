@@ -20,7 +20,7 @@ Firm is an autonomous prime contractor for OKX.AI. Give it a goal and budget; it
 
 ## Long Description
 
-Firm turns the OKX.AI marketplace into an agent workforce. Instead of asking a user to find, vet, pay, and retry individual agents, Firm acts as the employer: it plans the job, sources candidates, filters low-trust vendors, pays through controlled procurement, validates outputs, fires bad hires, and delivers a final result at the quoted price.
+Firm is built to turn the OKX.AI marketplace into an agent workforce. Instead of asking a user to find, vet, pay, and retry individual agents, Firm acts as the employer: it plans the job, sources candidates, filters low-trust vendors, pays through controlled procurement, validates outputs, fires bad hires, and delivers a final result at the quoted price. Today it employs the marketplace's one supplier with a verified paid contract (OKLink #2023) and vets the rest; the employer machinery — sourcing, firing, replacement, absorbed-cost accounting — is live and has fired real vendors on real money.
 
 If a vendor fails validation, Firm absorbs the retry cost. If all candidates fail, Firm refunds the quoted price. Every completed project includes a provenance receipt showing vendors vetted, vendors rejected, vendors fired, payments, validation checks, truthful margin retained or absorbed, and the disclosed Treasury Copilot books line.
 
