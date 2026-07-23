@@ -65,6 +65,15 @@ leg hires OKLink #2023 separately for its own price series. Results are
 validated per leg and assembled **only if every leg passes**; otherwise the
 buyer is refunded in full and the Firm absorbs the vendor cost.
 
+Payment model, stated exactly (verified against chain, not the docs): the
+buyer's authorization is verified, the job is durably created, and the payment
+**settles before any vendor is hired** — a multi-leg job can outlive an
+EIP-3009 authorization's validity window, so charge-then-deliver-or-refund is
+the honest model for it. If settlement fails, the job is parked and the buyer
+is never charged. If any leg fails after settlement, the automatic full refund
+fires — demonstrated on real money on 2026-07-22. (Express is different: its
+single leg completes inside the request, so it settles only after validation.)
+
 Required input: a `goal` naming assets and timeframes, a `budget_cap` in
 6-decimal USDT base units, and optional `constraints`. A single-leg request is
 refused with a pointer to Express; an unsupported goal is refused before any
@@ -125,9 +134,9 @@ Also cleared (2026-07-23):
   verified on chain.
 - ~~**Drop Firm Projects**~~ — **REVERSED, do not drop it.** Projects is now a
   distinct working product at `/projects`, not a broken duplicate of Express:
-  2–4 legs, per-leg vendor purchase, all-or-nothing assembly, and it authorizes
-  → validates → settles rather than charging up front. `x402-check` returns
-  `valid: true` on a bare `{}` body.
+  2–4 legs, per-leg vendor purchase, all-or-nothing assembly, settlement only
+  after the job durably exists, and an automatic full refund if any leg fails
+  after settlement. `x402-check` returns `valid: true` on a bare `{}` body.
 - ~~Wallet rotation before submitting~~ — decided: ship now, rotate after the
   deadline. Recorded as an accepted risk in `docs/status/F1.md`. `0xC029…50e0`
   must not accumulate meaningful value before it is rotated.
