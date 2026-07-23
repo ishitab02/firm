@@ -1,8 +1,8 @@
 # Handoff to Ishita — 2026-07-21
 
-> **NEWER HANDOFF BELOW — see "Handoff to Ishita — 2026-07-22" at the end of
-> this file. It is time-critical and supersedes the ACTION items here. Do the
-> 07-22 items first.**
+> **CURRENT HANDOFF: "Handoff to Ishita — 2026-07-23 (post-approval)" at the
+> very end of this file. #7138 is approved and listed; exactly two actions
+> remain and both need your account. Everything above it is history.**
 
 From: Poulav (F1/F2 lanes, via Claude Code)
 Branch: `f1/x402-live-money`, 30 commits, all pushed, tree clean.
