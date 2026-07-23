@@ -154,6 +154,13 @@ export class ChargingNotConfigured extends Error {}
 
 export const X_LAYER_USDT = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
 export const X_LAYER_NETWORK = "eip155:196";
+const X_LAYER_USDT_PAYMENT_EXTRA = {
+  decimals: 6,
+  name: "USD₮0",
+  symbol: "USDT",
+  transferMethod: "eip3009",
+  version: "1"
+} as const;
 
 /**
  * Where the Firm gets paid. Every field is required and none is guessed: an
@@ -212,6 +219,11 @@ export function sellerConfigFromEnv() {
  * or empty value: a wrong replay URL is worse than an absent one.
  */
 export function buildRequirements(spec: ChargeSpec): PaymentRequirements {
+  const paymentExtra =
+    spec.network === X_LAYER_NETWORK && spec.asset.toLowerCase() === X_LAYER_USDT
+      ? { ...X_LAYER_USDT_PAYMENT_EXTRA, decimals: spec.decimals }
+      : { decimals: spec.decimals };
+
   return {
     x402Version: 2,
     ...(spec.resourceUrl
@@ -239,7 +251,10 @@ export function buildRequirements(spec: ChargeSpec): PaymentRequirements {
           input: spec.inputSchema ?? { type: "object" },
           output: spec.outputSchema ?? { type: "object" }
         },
-        extra: { decimals: spec.decimals }
+        // Local-key buyers need the exact EIP-712 domain to sign this token.
+        // USD₮0 uses U+20AE (₮), not an ASCII T, and version "1"; guessing
+        // either value produces a well-formed signature that cannot settle.
+        extra: paymentExtra
       }
     ]
   };

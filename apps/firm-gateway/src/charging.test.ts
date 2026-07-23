@@ -131,6 +131,27 @@ describe("buildRequirements", () => {
     const requirements = buildRequirements({ ...spec, inputSchema });
     expect((requirements.accepts[0].outputSchema as any).input).toEqual(inputSchema);
   });
+
+  it("publishes the verified USD₮0 EIP-3009 domain for local-key buyers", () => {
+    const requirements = buildRequirements({
+      ...spec,
+      asset: X_LAYER_USDT,
+      network: X_LAYER_NETWORK
+    });
+
+    expect(requirements.accepts[0].extra).toEqual({
+      decimals: 6,
+      name: "USD₮0",
+      symbol: "USDT",
+      transferMethod: "eip3009",
+      version: "1"
+    });
+  });
+
+  it("does not claim the USD₮0 signing domain for an unknown asset", () => {
+    const requirements = buildRequirements(spec);
+    expect(requirements.accepts[0].extra).toEqual({ decimals: 6 });
+  });
 });
 
 /**
