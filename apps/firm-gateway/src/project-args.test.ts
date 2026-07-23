@@ -1,10 +1,57 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  coerceProjectArgs,
   directHttpToolCall,
   PROJECT_EXECUTE_HTTP_INPUT,
   projectSpecFromGoal
 } from "./project-args.js";
+
+/**
+ * The OKX payment CLI sends `--param key=value` as flat strings, so a buyer's
+ * `--param budget_cap={...}` reaches the server as a JSON *string*. These pin
+ * that it is coerced back to an object — a direct JSON POST already sends the
+ * object, so the two entry paths must agree.
+ */
+describe("coerceProjectArgs — CLI flat-string params become objects", () => {
+  it("parses a stringified budget_cap, the exact shape onchainos --param sends", () => {
+    const coerced = coerceProjectArgs({
+      goal: "BTC and ETH on 1h and 4h",
+      budget_cap: '{"amount":"1000000","decimals":6,"token":"USDT"}'
+    }) as Record<string, unknown>;
+    expect(coerced.budget_cap).toEqual({ amount: "1000000", decimals: 6, token: "USDT" });
+  });
+
+  it("leaves an already-object budget_cap untouched (direct JSON POST path)", () => {
+    const object = { amount: "1000000", decimals: 6, token: "USDT" };
+    const coerced = coerceProjectArgs({ goal: "g", budget_cap: object }) as Record<string, unknown>;
+    expect(coerced.budget_cap).toEqual(object);
+  });
+
+  it("coerces constraints the same way", () => {
+    const coerced = coerceProjectArgs({
+      goal: "g",
+      budget_cap: '{"amount":"1000000","decimals":6}',
+      constraints: '{"min_vendor_score":80}'
+    }) as Record<string, unknown>;
+    expect(coerced.constraints).toEqual({ min_vendor_score: 80 });
+  });
+
+  it("leaves a non-JSON string in place so the schema still rejects it", () => {
+    const coerced = coerceProjectArgs({ goal: "g", budget_cap: "one dollar" }) as Record<string, unknown>;
+    expect(coerced.budget_cap).toBe("one dollar");
+  });
+
+  it("does not turn a JSON array or scalar string into an object", () => {
+    const coerced = coerceProjectArgs({ goal: "g", budget_cap: "[1,2,3]" }) as Record<string, unknown>;
+    expect(coerced.budget_cap).toBe("[1,2,3]");
+  });
+
+  it("passes non-object args through unchanged", () => {
+    expect(coerceProjectArgs(null)).toBe(null);
+    expect(coerceProjectArgs("x")).toBe("x");
+  });
+});
 
 describe("Projects v1 contract", () => {
   it("plans one timeframe across two assets as two paid-and-validated legs", () => {

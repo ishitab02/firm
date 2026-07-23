@@ -22,6 +22,43 @@ export type ProjectSpecResult =
   | { ok: true; spec: ProjectSpec }
   | { ok: false; detail: string };
 
+/**
+ * Coerce JSON-string-valued fields on a Projects body back into objects.
+ *
+ * The OKX payment CLI passes business params as `--param key=value`, flat
+ * strings only — there is no nested-object form. A buyer following the standard
+ * flow sends `--param budget_cap={"amount":"1000000",...}`, which reaches the
+ * server as `{ budget_cap: "{\"amount\":\"1000000\",...}" }`: `budget_cap` a
+ * STRING, not the object the schema requires. It then failed `INVALID_ARGS`
+ * with HTTP 400 — the same "paid replay is not a valid x402 call" shape this
+ * entry has already been rejected for, and the way a reviewer buying through
+ * the CLI would first meet Projects.
+ *
+ * A direct JSON POST already sends the object and is untouched: coercion only
+ * fires when the field arrived as a string, and a string that is not JSON is
+ * left as-is so the schema still rejects genuine garbage. Applied to
+ * `constraints` too, which is the other object-valued field a CLI buyer might
+ * pass the same way.
+ */
+export function coerceProjectArgs(args: unknown): unknown {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return args;
+  const bag = args as Record<string, unknown>;
+  const coerced: Record<string, unknown> = { ...bag };
+  for (const key of ["budget_cap", "constraints"]) {
+    const value = bag[key];
+    if (typeof value !== "string") continue;
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        coerced[key] = parsed;
+      }
+    } catch {
+      // Not JSON: leave the string in place so schema validation still fails it.
+    }
+  }
+  return coerced;
+}
+
 function uniqueMatches<T extends string>(text: string, expression: RegExp, allowed: readonly T[]): T[] {
   const found: T[] = [];
   for (const match of text.matchAll(expression)) {

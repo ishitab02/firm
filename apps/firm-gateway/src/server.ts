@@ -23,6 +23,7 @@ import {
   normaliseExpressArgs
 } from "./express-args.js";
 import {
+  coerceProjectArgs,
   directHttpToolCall,
   PROJECT_EXECUTE_HTTP_INPUT,
   PROJECT_RUN_HTTP_INPUT,
@@ -173,7 +174,11 @@ function prepareProject(
   args: unknown,
   mode: PricingMode = pricingMode()
 ): PreparedProject | { error: Record<string, unknown> } {
-  const parsed = quoteRequest.safeParse(args);
+  // The OKX payment CLI can only send flat string params, so a buyer's
+  // `--param budget_cap={...}` arrives as a JSON string, not an object. Coerce
+  // it back before validation; a direct JSON POST is unaffected. See
+  // coerceProjectArgs.
+  const parsed = quoteRequest.safeParse(coerceProjectArgs(args));
   if (!parsed.success) {
     return {
       error: {
